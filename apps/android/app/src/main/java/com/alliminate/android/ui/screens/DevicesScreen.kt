@@ -150,19 +150,21 @@ fun DevicesScreen(onOpenDrawer: () -> Unit) {
                 online = masterOnline == true,
                 trailing = {
                     TextButton(onClick = {
+                        // Clear locally FIRST, notify the Mac after — this used to await the Mac call
+                        // (up to CONNECT_TIMEOUT_MS, 6s) before anything visibly changed, so tapping Unpair
+                        // while the Mac was unreachable (e.g. mid-hotspot-switch) looked like the button
+                        // just did nothing for several seconds. The user asked to unpair; this phone can't
+                        // force the Mac to agree regardless of ordering, so there's no correctness reason
+                        // to make them wait on it.
+                        Prefs.clearPairing()
+                        LocalServerService.stop(context)
+                        PairingStatus.isError.value = false
+                        PairingStatus.message.value = "Unpaired"
                         scope.launch {
                             val removedOnMaster = MasterApi.unpair(pairedHost, pairedToken, Prefs.deviceId)
-                            // clear locally either way — the user asked to unpair, and this phone can't
-                            // force the Mac to agree. If the Mac call failed, tell them so it doesn't look
-                            // like a clean unpair happened on both ends (that mismatch is exactly what
-                            // left stale phone entries showing up on the Mac before).
-                            Prefs.clearPairing()
-                            LocalServerService.stop(context)
-                            PairingStatus.isError.value = !removedOnMaster
-                            PairingStatus.message.value = if (removedOnMaster) {
-                                "Unpaired"
-                            } else {
-                                "Unpaired here, but couldn't reach your Mac — remove it there too from Devices"
+                            if (!removedOnMaster) {
+                                PairingStatus.isError.value = true
+                                PairingStatus.message.value = "Unpaired here, but couldn't reach your Mac — remove it there too from Devices"
                             }
                         }
                     }) {

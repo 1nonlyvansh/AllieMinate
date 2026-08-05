@@ -324,8 +324,22 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
   });
 
   app.delete<{ Params: { id: string } }>('/devices/:id', async (req) => {
+    const target = loadPairedDevices().find((d) => d.id === req.params.id);
     const devices = loadPairedDevices().filter((d) => d.id !== req.params.id);
     savePairedDevices(devices);
+
+    // Unpairing from this side only ever removed OUR OWN record — the other device never found out, so
+    // it just kept showing us as "Offline" forever instead of actually unpaired (its own token still on
+    // file, still trying to reach us). Best-effort, fire-and-forget: don't block this response on it, and
+    // don't fail the (already-completed) local removal if the other device is unreachable — same
+    // reasoning Android's own unpair already uses in reverse (MasterApi.unpair in DevicesScreen.kt).
+    if (target) {
+      fetch(`http://${target.host}/unpair`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${target.token}` },
+      }).catch(() => {});
+    }
+
     return { ok: true };
   });
 

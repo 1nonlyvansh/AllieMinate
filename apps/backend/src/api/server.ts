@@ -1093,8 +1093,19 @@ export async function buildServer(
   });
 
   app.get('/ws', { websocket: true }, (socket) => {
+    // A `ws` socket is an EventEmitter — if it emits 'error' with no listener attached (exactly what
+    // happens when the network drops out from under an open connection mid-send, or the desktop app's
+    // window closes without a clean WebSocket close handshake), Node throws it as an uncaught exception.
+    // Without this handler, a Mac losing internet even briefly could take the whole backend process down
+    // with it — the renderer's own reconnect logic already handles a dropped socket gracefully; the
+    // backend just needs to not die when the write side of it breaks.
+    socket.on('error', () => {});
     const onSyncEvent = (event: SyncEvent) => {
-      socket.send(JSON.stringify(event));
+      try {
+        socket.send(JSON.stringify(event));
+      } catch {
+        // socket already dead — 'close' below will unsubscribe it from syncEvents shortly
+      }
     };
     syncEvents.on('sync-event', onSyncEvent);
     socket.on('close', () => syncEvents.off('sync-event', onSyncEvent));

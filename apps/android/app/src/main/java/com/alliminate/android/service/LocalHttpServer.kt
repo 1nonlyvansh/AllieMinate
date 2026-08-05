@@ -145,6 +145,7 @@ class LocalHttpServer(private val context: Context) : NanoHTTPD(LOCAL_SERVER_POR
             session.method == Method.POST && uri == "/continuity" -> handleContinuity(session)
             session.method == Method.POST && uri == "/unlock/request" -> handleUnlockRequest(session)
             session.method == Method.GET && uri.startsWith("/unlock/request/") && uri.endsWith("/status") -> handleUnlockStatus(uri)
+            session.method == Method.POST && uri == "/unpair" -> handleUnpair()
             else -> notFound()
         }
     }
@@ -228,6 +229,19 @@ class LocalHttpServer(private val context: Context) : NanoHTTPD(LOCAL_SERVER_POR
         val id = uri.removePrefix("/unlock/request/").removeSuffix("/status")
         val request = UnlockApprovalRegistry.get(id) ?: return notFound()
         return json(JSONObject().apply { put("status", request.status.name.lowercase()) })
+    }
+
+    // The Master just removed us from its own paired-devices list (devices.ts's DELETE /devices/:id) and
+    // is telling us so — without this, unpairing from the Mac side only ever cleared ITS OWN record; this
+    // phone kept its token and just sat there showing the Mac as "Offline" forever instead of actually
+    // unpaired. The Bearer token check in serve() above already proves this call came from the Master we
+    // currently trust (the token has to match Prefs.masterToken.value bit-for-bit), so no extra body/id
+    // check is needed here — just drop the pairing. The foreground service is left running; every feature
+    // that depends on being paired already gates on Prefs.isPaired, so an unpaired-but-still-running
+    // service is harmless (same as right after a fresh install, before ever pairing).
+    private fun handleUnpair(): Response {
+        Prefs.clearPairing()
+        return json(JSONObject().apply { put("ok", true) })
     }
 
     private fun handleStatus(): Response {
