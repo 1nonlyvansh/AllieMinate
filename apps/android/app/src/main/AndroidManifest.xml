@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- LAN device pairing / transfer (Phase 1+) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+
+    <!-- sync notifications, matching the desktop app's real notification feature -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- background sync reliability (Phase 5 camera-roll backup) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- local LAN server (Phase 3/4): lets the paired Master Device browse and push files to this phone
+         even while the app isn't in the foreground -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!-- Images/Videos/Audio categories in the Master Device's phone browser -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+
+    <!-- Documents/Archives categories in the Master Device's phone browser — scoped storage otherwise only
+         exposes media the app itself created, not real documents/zips other apps saved. User opted in to
+         this after being shown the tradeoff (bigger privacy footprint, Play Store scrutiny). -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
+
+    <!-- App Lock (biometric) -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
+    <!-- saving downloaded cloud files to the public Downloads folder on API 26-28 (29+ uses MediaStore, no permission needed) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+
+    <!-- camera-roll auto backup (Phase 5): scheduled by WorkManager, runs on WiFi only -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- QR pairing scanner -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <application
+        android:name=".AllieMinateApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.AllieMinate"
+        android:usesCleartextTraffic="true"
+        android:supportsRtl="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.AllieMinate">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- USB pairing deep link: the desktop's "Connect via USB" flow runs `adb shell am start`
+                 with this URI once the tunnel is up, so pairing over USB needs no QR scan or manual code
+                 entry — the one-time USB-debugging authorization prompt is the only "confirm on phone"
+                 step, same as O+ Connect. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="alliminate" android:host="pair" />
+            </intent-filter>
+        </activity>
+
+        <!-- two distinct share-sheet entries for the same Activity — "Save File to Cloud" and "Send to
+             Connected Devices" show as separate AllieMinate targets when sharing from any other app. -->
+        <activity-alias
+            android:name=".ShareToCloudAlias"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:label="Save File to Cloud"
+            android:icon="@mipmap/ic_launcher">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".ShareToDeviceAlias"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:label="Send to Connected Devices"
+            android:icon="@mipmap/ic_launcher">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity-alias>
+
+        <service
+            android:name=".service.LocalServerService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <receiver
+            android:name=".notifications.StopTransferReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".notifications.NearbyRequestReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".notifications.UnlockRequestReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".widget.DeviceStatusWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/device_status_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.QuickShareWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quick_share_widget_info" />
+        </receiver>
+
+    </application>
+
+</manifest>

@@ -1,0 +1,137 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  font-family:
+    'Segoe UI Variable',
+    'Segoe UI',
+    system-ui,
+    sans-serif;
+  color: #1b1b1b;
+}
+
+.app {
+  padding: 48px 40px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.app-header .subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  opacity: 0.65;
+}
+
+/* Mica already blurs+tints the window backdrop — surfaces stay flat, semi-opaque,
+   Fluent's smaller 8px radius, subtle 1px elevation shadow instead of glass blur. */
+.glass-panel {
+  padding: 20px 24px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.glass-panel h2 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  opacity: 0.6;
+}
+
+.error-panel {
+  color: #c42b1c;
+}
+
+.chip-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  padding: 3px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(0, 103, 192, 0.12);
+  color: #0067c0;
+}
+
+.chip-muted {
+  background: rgba(96, 96, 96, 0.12);
+  color: #616161;
+}
+
+.folder-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.folder-card-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.folder-meta {
+  margin: 6px 0 10px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.file-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  font-family: 'Cascadia Code', ui-monospace, monospace;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.file-list li {
+  padding: 4px 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+.file-list li:first-child {
+  border-top: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  html,
+  body {
+    color: #f3f3f3;
+  }
+  .glass-panel {
+    background: rgba(32, 32, 32, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+  .error-panel {
+    color: #ff99a4;
+  }
+  .chip {
+    background: rgba(76, 194, 255, 0.15);
+    color: #60cdff;
+  }
+  .chip-muted {
+    background: rgba(255, 255, 255, 0.08);
+    color: #a0a0a0;
+  }
+  .file-list li {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+}

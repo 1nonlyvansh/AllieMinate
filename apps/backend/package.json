@@ -1,0 +1,25 @@
+{
+  "name": "@alliminate/backend",
+  "private": true,
+  "version": "0.1.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsc -p tsconfig.json --watch",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.658.0",
+    "chokidar": "^3.6.0",
+    "dotenv": "^16.4.5",
+    "fastify": "^4.28.0",
+    "@fastify/websocket": "^10.0.1",
+    "@fastify/cors": "^9.0.1",
+    "googleapis": "^144.0.0",
+    "megajs": "^1.3.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}

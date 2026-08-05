@@ -1,0 +1,13 @@
+{
+  "name": "alliminate",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "allowScripts": {
+    "electron@33.4.11": true,
+    "esbuild@0.23.1": true,
+    "fsevents@2.3.3": true
+  }
+}
