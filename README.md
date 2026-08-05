@@ -249,7 +249,7 @@ See [Pairing](#pairing) above.
 
 <br>
 
-[![GitHub](https://img.shields.io/badge/GitHub-1nonlyvansh%2FAllieMinate-00e5ff?style=flat-square&logo=github&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate)
+[![GitHub](https://img.shields.io/badge/GitHub-1nonlyvansh%2FAllieMinate-00e5ff?style=flat-square&logo=github&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh)
 &nbsp;
 [![Instagram](https://img.shields.io/badge/Instagram-%401nonlyvansh-00e5ff?style=flat-square&logo=instagram&logoColor=00e5ff&labelColor=050d1a)](https://instagram.com/1nonlyvansh)
 
