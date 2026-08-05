@@ -1,79 +1,181 @@
-# AllieMinate
+<div align="center">
 
-**One app for every cloud you own, and every device you carry.**
+```
+  ___   _      _     _____ ________  ________ _   _   ___ _____ _____ 
+ / _ \ | |    | |   |_   _|  ___|  \/  |_   _| \ | | / _ \_   _|  ___|
+/ /_\ \| |    | |     | | | |__ | .  . | | | |  \| |/ /_\ \| | | |__  
+|  _  || |    | |     | | |  __|| |\/| | | | | . ` ||  _  || | |  __| 
+| | | || |____| |_____| |_| |___| |  | |_| |_| |\  || | | || | | |___ 
+\_| |_/\_____/\_____/\___/\____/\_|  |_/\___/\_| \_/\_| |_/\_/ \____/ 
+```
 
-AllieMinate ties Google Drive, OneDrive, Backblaze B2, IDrive e2, MEGA, and pCloud into a single unified workspace on your Mac — and pairs it with your Android phone over your local network, so both feel like one connected system instead of six separate apps.
+**One workspace for every cloud you own, and every device you carry.**
 
----
-
-## What it does
-
-### ☁️ Cloud aggregation
-- Connect **Google Drive, OneDrive, Backblaze B2, IDrive e2, MEGA, and pCloud** — as many accounts per provider as you want.
-- One combined **Files** view across every account, or browse each cloud's real, native folder tree individually.
-- **Pinned Folders** — bookmark any real cloud folder (not just AllieMinate's own space) for one-click access.
-- Drag-and-drop upload, download, rename, move, copy, and a full **Trash** with recovery, sitting on top of every provider's native file operations.
-- Cross-cloud **Search** — one query, every account, every device.
-
-### 🔄 Sync Engine
-- Turn any local folder into a live, two-way (or backup-only, or download-only) sync target against a cloud account.
-- Real conflict detection, ignore-pattern rules, bandwidth throttling, and quota warnings.
-- Android has its own lightweight one-way Sync Pairs — point a phone folder (like Camera or Screenshots) at a cloud destination and it pushes automatically in the background.
-
-### 📱 Cross-device, not just cross-cloud
-- **Pair your phone** with your Mac over Wi-Fi (QR code) or USB — no cloud relay, straight LAN connection.
-- Browse your phone's photos, videos, documents, and archives from the Mac, and vice versa.
-- **Nearby Share** — drop a file on any paired (or even unpaired, nearby) device without touching a cloud account at all.
-- **Continuity** — open a file on your phone, pick it back up on your Mac.
-- **Remote unlock** — approve unlocking your Mac from your paired phone.
-- Self-healing pairing: if your Mac and phone drift onto different networks (like your phone's own hotspot), they automatically rediscover each other instead of requiring a re-pair.
-
-### 🔒 Built to stay out of your way
-- App Lock (Touch ID / PIN) on both platforms.
-- A menu bar tray on Mac with live recent files, drag-out, and quick actions — no need to keep the full window open.
-- Everything else — trash retention, transfer history, storage breakdown per account — just works in the background.
+*Google Drive, OneDrive, Backblaze B2, IDrive e2, MEGA, and pCloud — unified on your Mac, paired with your phone, with nothing routed through anyone's server but the providers themselves.*
 
 ---
 
-## How it's built
+[![Version](https://img.shields.io/badge/Version-v1.0.0-00e5ff?style=flat-square&labelColor=050d1a)](.)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Backend%20%26%20UI-00e5ff?style=flat-square&logo=typescript&logoColor=00e5ff&labelColor=050d1a)](https://www.typescriptlang.org)
+[![Kotlin](https://img.shields.io/badge/Kotlin-Android-00e5ff?style=flat-square&logo=kotlin&logoColor=00e5ff&labelColor=050d1a)](https://kotlinlang.org)
+[![Electron](https://img.shields.io/badge/Electron-Desktop-00e5ff?style=flat-square&logo=electron&logoColor=00e5ff&labelColor=050d1a)](https://electronjs.org)
+[![React](https://img.shields.io/badge/React-18-00e5ff?style=flat-square&logo=react&logoColor=00e5ff&labelColor=050d1a)](https://react.dev)
+[![Fastify](https://img.shields.io/badge/Fastify-Backend-00e5ff?style=flat-square&logo=fastify&logoColor=00e5ff&labelColor=050d1a)](https://fastify.dev)
+[![Android](https://img.shields.io/badge/Android-Companion%20App-00e5ff?style=flat-square&logo=android&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/releases/latest)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%C2%B7%20Windows%20soon-0d2a3a?style=flat-square&logo=apple&logoColor=c8e8f0&labelColor=050d1a)](.)
+[![Status](https://img.shields.io/badge/Status-Active%20Dev-1db954?style=flat-square&labelColor=050d1a)](.)
 
-AllieMinate is a monorepo with three moving pieces:
+</div>
+
+---
+
+## What is AllieMinate?
+
+AllieMinate ties **Google Drive, OneDrive, Backblaze B2, IDrive e2, MEGA, and pCloud** into a single unified workspace on your Mac — as many accounts per provider as you want, browsed, searched, and managed like one drive instead of six separate apps fighting for your menu bar.
+
+It then pairs with your **Android phone** directly over your local network — no cloud relay, no AllieMinate-operated server in the middle. Once paired, your phone's photos and files show up on your Mac, your Mac's clouds show up on your phone, and both stay in sync even if your phone's IP changes — including when your Mac is tethered to your phone's own hotspot.
+
+---
+
+## Feature Matrix
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**☁️ Cloud Aggregation**
+- Google Drive, OneDrive, Backblaze B2, IDrive e2, MEGA, pCloud — multiple accounts per provider
+- One combined Files view across every account, or browse each cloud's real native folder tree
+- Pinned Folders — bookmark any real cloud folder, not just AllieMinate's own space
+- Drag-and-drop upload, download, rename, move, copy
+- Full Trash with recovery across every provider
+- Cross-cloud Search — one query, every account, every device
+
+**🔄 Sync Engine**
+- Two-way, backup-only, or download-only sync between any local folder and a cloud account
+- Real conflict detection and resolution
+- User-editable ignore-pattern rules
+- Bandwidth throttling and storage quota warnings
+- Android Sync Pairs — point a phone folder at a cloud destination, it pushes automatically in the background
+
+**📱 Cross-Device**
+- Pair your phone over Wi-Fi (QR code) or USB — straight LAN connection, no cloud relay
+- Browse your phone's photos, videos, documents, and archives from the Mac, and vice versa
+- Nearby Share — drop a file on any paired (or unpaired, nearby) device without touching a cloud account
+- Continuity — open a file on your phone, pick it back up on your Mac
+- Remote unlock — approve unlocking your Mac from your paired phone
+- Self-healing pairing — Mac and phone rediscover each other automatically across network changes, including your phone's own hotspot
+
+</td>
+<td width="50%" valign="top">
+
+**🔒 Security**
+- App Lock (Touch ID / PIN) on both platforms
+- OAuth tokens and API keys never committed — `.env`-only, fully gitignored
+- Every paired-device request signed and token-authenticated
+
+**🖥️ Desktop Experience**
+- Menu bar tray — live recent files, drag-out, quick actions without opening the full window
+- Global search across every cloud and every paired device at once
+- Full-featured Trash, Transfer History, and per-account storage breakdown
+
+**📷 Google Photos**
+- Browse and pick from your linked Google Photos library alongside your Drive files
+
+**⚡ Performance**
+- Every provider fetch runs in parallel — one slow account never blocks the others
+- Bounded-concurrency batch operations — bulk delete/move/copy don't hammer any single provider
+- Streaming uploads for large files — never fully buffered in memory
+
+**🛠️ Reliability**
+- Auto-restart on backend crash, with automated crash logging
+- Global unhandled-rejection safety net — one bad promise doesn't take down the whole app
+- Trash entries survive a failed cloud delete instead of silently vanishing
+
+</td>
+</tr>
+</table>
+
+---
+
+## Android Companion App
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**Features**
+- Full cloud browsing — every account your Mac has connected, right on your phone
+- Camera/folder backup to any cloud account, with live progress notifications
+- Sync Pairs — one-way background push from a phone folder to a cloud destination
+- Nearby Share — send/receive files with any paired or nearby AllieMinate device
+- Cross-device search
+- App Lock (biometric)
+- Pair via QR code or USB — no manual IP entry
+
+</td>
+<td width="50%" valign="top">
+
+**Requirements**
+- Android 8.0 (API 26)+
+- Same Wi-Fi network as your Mac (or your Mac tethered to your phone's hotspot)
+- AllieMinate running on your Mac
+
+**Download**
+
+[![Download APK](https://img.shields.io/badge/Download-AllieMinate.apk-00e5ff?style=for-the-badge&logo=android&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/releases/latest)
+
+> Enable *Install from unknown sources* in Android Settings → Security before installing.
+
+</td>
+</tr>
+</table>
+
+### Pairing
+
+1. On Mac: **Devices → Pair an Android** — shows a QR code (or offers USB).
+2. On phone: **Devices → Pair a Device** — scan the QR code, or connect via USB.
+3. Done. Your phone appears on the Mac's Devices page, and your Mac's clouds appear in the phone's Cloud Services tab.
+
+---
+
+## Architecture
 
 ```
 apps/
-  backend/    Fastify server — the real brain. Talks to every cloud provider, every paired
-              device, handles sync, trash, search, pairing. Runs locally, never leaves your machine.
-  desktop/    Electron + React. The macOS (and in-progress Windows) app — a UI shell around
-              the backend, plus native bits (tray, USB pairing, lock screen).
-  android/    Kotlin + Jetpack Compose. The phone app — its own local HTTP server so the Mac
-              can browse it, plus background workers for sync/backup.
+  backend/    Fastify server — the real brain. Talks to every cloud provider and every
+              paired device, handles sync, trash, search, pairing. Runs locally, never
+              leaves your machine.
+  desktop/    Electron + React. The macOS (Windows in progress) app — a UI shell around
+              the backend, plus native bits: tray, USB pairing, lock screen.
+  android/    Kotlin + Jetpack Compose. The phone app — its own local HTTP server so the
+              Mac can browse it, plus background workers for sync and camera backup.
 packages/
   shared/     TypeScript types shared between backend and desktop.
 ```
 
-The backend is the single source of truth — the desktop app is just a window onto it, and the phone talks to it directly over the LAN once paired. Nothing about your files or accounts passes through any AllieMinate-operated server, because there isn't one.
+The backend is the single source of truth. The desktop app is a window onto it; the phone talks to it directly over the LAN once paired. Nothing about your files or accounts passes through any AllieMinate-operated server, because there isn't one.
 
 ---
 
-## Running the Mac app
+## Running the Mac App
 
 ### Requirements
 - macOS
 - [Node.js](https://nodejs.org) 20+
-- npm
 
-### 1. Clone and install
+### 1 — Clone & install
 ```bash
-git clone https://github.com/<your-username>/AllieMinate.git
+git clone https://github.com/1nonlyvansh/AllieMinate.git
 cd AllieMinate
 npm install
 ```
 
-### 2. Set up your cloud credentials
+### 2 — Cloud credentials
 ```bash
 cp .env.example .env
 ```
-Fill in credentials for whichever providers you want to connect. You don't need all of them — the app only shows providers it finds valid config for.
+Fill in whichever providers you want — the app only shows providers it finds valid config for.
 
 | Provider | Required env vars |
 |---|---|
@@ -84,42 +186,49 @@ Fill in credentials for whichever providers you want to connect. You don't need 
 | pCloud | `PCLOUD_CLIENT_ID`, `PCLOUD_CLIENT_SECRET`, `PCLOUD_ACCESS_TOKEN` |
 | MEGA | `MEGA_EMAIL`, `MEGA_PASSWORD` |
 
-> Google Drive and OneDrive need an OAuth app registered in their respective developer consoles (Google Cloud Console / Azure App Registrations) to get a client ID/secret — B2, IDrive e2, and pCloud use straightforward API keys from their own dashboards, and MEGA just uses your account login.
+> Google Drive and OneDrive need an OAuth app registered in their own developer consoles to get a client ID/secret. B2, IDrive e2, and pCloud use plain API keys from their dashboards. MEGA just uses your account login.
 
-### 3. Build and run
+### 3 — Build & run
 ```bash
 bash apps/desktop/build/build-app.sh
 open ~/Applications/AllieMinate.app
 ```
-This compiles the backend, desktop main process, and both renderer bundles, then assembles and code-signs (ad-hoc) a full `.app` bundle installed to `~/Applications`. Re-run the same script after any source change — it preserves your connected accounts, pairings, and pinned folders across rebuilds.
+Compiles the backend, desktop main process, and both renderer bundles, then assembles and installs a full `.app` to `~/Applications`. Re-run after any change — it preserves your connected accounts, pairings, and pinned folders across rebuilds.
 
 ---
 
-## Running the Android app
+## Running the Android App
 
 ### Requirements
 - Android Studio (Iguana or newer)
-- A phone or emulator on **Android 8.0 (API 26)+**
+- A phone or emulator on Android 8.0 (API 26)+
 
-### 1. Open the project
-Open `apps/android` in Android Studio and let it sync Gradle.
+### 1 — Open & build
+Open `apps/android` in Android Studio, let Gradle sync, then Run on a connected device or emulator.
 
-### 2. Build & install
-Run the `app` configuration on a connected device or emulator — standard Android Studio ▶️ Run.
-
-### 3. Pair with your Mac
-With the Mac app running:
-1. On Mac: **Devices → Pair a Device**, or **Devices → Pair an Android** for a QR code / USB flow.
-2. On phone: **Devices → Pair a Device**, scan the QR code (same Wi-Fi network) or connect via USB.
-3. Once paired, your phone shows up on the Mac's Devices page, and your Mac's clouds show up in the phone's Cloud Services tab — no separate login needed on either side.
+### 2 — Pair
+See [Pairing](#pairing) above.
 
 ---
 
-## A few things worth knowing
+## Tech Stack
 
-- **Nothing about your files touches an AllieMinate server** — there isn't one. The backend runs locally, cloud calls go straight to each provider's own API, and device-to-device traffic stays on your LAN.
+| Layer | Technology |
+|---|---|
+| Backend | Node.js · TypeScript · Fastify |
+| Desktop | Electron · React 18 · TypeScript |
+| Android | Kotlin · Jetpack Compose · WorkManager |
+| Shared types | TypeScript (`packages/shared`) |
+| Cloud SDKs | Google APIs (Drive), Microsoft Graph (OneDrive), AWS SDK v3 (S3-compatible: B2, IDrive e2), MEGA SDK, pCloud REST API |
+| Device pairing | LAN HTTP + token auth, UDP broadcast discovery (self-healing reconnect) |
+
+---
+
+## A Few Things Worth Knowing
+
+- **Nothing about your files touches an AllieMinate server** — there isn't one. Cloud calls go straight to each provider's own API; device-to-device traffic stays on your LAN.
 - **`.env` is gitignored on purpose.** Never commit real credentials — see `.env.example` for the shape without the values.
-- The Windows desktop build is next up — the backend and shared types are already platform-agnostic; only the Electron shell needs Windows-specific packaging.
+- Windows desktop is next — the backend and shared types are already platform-agnostic; only the Electron shell needs Windows packaging.
 
 ---
 
@@ -132,4 +241,16 @@ With the Mac app running:
 
 ---
 
-<p align="center">Built for people who are tired of six different cloud apps fighting for the same menu bar icon.</p>
+<div align="center">
+
+**AllieMinate v1.0.0** — cross-platform cloud aggregation · self-healing device pairing · zero-relay sync
+
+*A space with you.*
+
+<br>
+
+[![GitHub](https://img.shields.io/badge/GitHub-1nonlyvansh%2FAllieMinate-00e5ff?style=flat-square&logo=github&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate)
+&nbsp;
+[![Instagram](https://img.shields.io/badge/Instagram-%401nonlyvansh-00e5ff?style=flat-square&logo=instagram&logoColor=00e5ff&labelColor=050d1a)](https://instagram.com/1nonlyvansh)
+
+</div>
