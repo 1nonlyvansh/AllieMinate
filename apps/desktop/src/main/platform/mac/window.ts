@@ -1,5 +1,6 @@
 import { BrowserWindow, shell } from 'electron';
 import { injectThemeCss } from '../injectTheme';
+import { registerZoomShortcuts } from '../zoomShortcuts';
 
 export function createWindow(preloadPath: string): BrowserWindow {
   const win = new BrowserWindow({
@@ -41,6 +42,7 @@ export function createWindow(preloadPath: string): BrowserWindow {
   });
 
   injectThemeCss(win, 'mac/glass.css');
+  registerZoomShortcuts(win);
 
   // online-editor links (Google Sheets/Docs, Office Online, etc) should open in the user's real
   // browser — that's where they're actually signed in — not a session-less Electron window.

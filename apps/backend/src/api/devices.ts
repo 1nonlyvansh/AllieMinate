@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import crypto from 'node:crypto';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
 import { getDeviceIdentity, getLanAddress } from '../device';
 import { getCachedPath, addToCache } from '../cache';
 import { categoryForFile, extFromMime, loadOpenWithPrefs } from '../openWith';
+import { openLocalFile } from '../openLauncher';
 import {
   loadPairedDevices,
   savePairedDevices,
@@ -22,7 +22,10 @@ import { getNearbyPeers } from '../nearbyDiscovery';
 
 const PING_TIMEOUT_MS = 4000;
 
-async function testConnection(host: string, token: string): Promise<{ ok: boolean; error?: string; nearbyShareEnabled?: boolean }> {
+async function testConnection(
+  host: string,
+  token: string,
+): Promise<{ ok: boolean; error?: string; nearbyShareEnabled?: boolean; hasOwnClouds?: boolean; masterDeviceEnabled?: boolean }> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
@@ -33,9 +36,15 @@ async function testConnection(host: string, token: string): Promise<{ ok: boolea
     clearTimeout(timer);
     if (!res.ok) return { ok: false, error: `device responded with HTTP ${res.status}` };
     // read straight off the same /status body already being fetched for the reachability check — no
-    // extra round-trip just to learn whether this peer wants to show up as a Nearby Share target.
+    // extra round-trip just to learn whether this peer wants to show up as a Nearby Share target, or
+    // whether it currently qualifies as OUR Master (has its own clouds + is willing to serve them).
     const body = await res.json().catch(() => ({}));
-    return { ok: true, nearbyShareEnabled: body.nearbyShareEnabled !== false };
+    return {
+      ok: true,
+      nearbyShareEnabled: body.nearbyShareEnabled !== false,
+      hasOwnClouds: Array.isArray(body.providers) && body.providers.length > 0,
+      masterDeviceEnabled: body.masterDeviceEnabled !== false,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     // silent before — "why is my phone Offline" was unanswerable. Now it lands in backend.log AND is
@@ -53,7 +62,11 @@ async function testConnection(host: string, token: string): Promise<{ ok: boolea
 const ONLINE_FAILURE_THRESHOLD = 2;
 const onlineState = new Map<string, { consecutiveFailures: number; reportedOnline: boolean }>();
 
-export async function isOnline(deviceId: string, host: string, token: string): Promise<{ online: boolean; nearbyShareEnabled: boolean }> {
+export async function isOnline(
+  deviceId: string,
+  host: string,
+  token: string,
+): Promise<{ online: boolean; nearbyShareEnabled: boolean; hasOwnClouds: boolean; masterDeviceEnabled: boolean }> {
   let result = await testConnection(host, token);
 
   // /devices/self/host (the phone pinging US to report its new IP) only works when the phone can still
@@ -91,7 +104,15 @@ export async function isOnline(deviceId: string, host: string, token: string): P
   }
 
   onlineState.set(deviceId, state);
-  return { online: state.reportedOnline, nearbyShareEnabled: result.nearbyShareEnabled === true };
+  // an unreachable peer can't currently qualify as anyone's Master regardless of what it last
+  // reported — role is a live relationship, not a cached one, so these default to false when result.ok
+  // is false rather than remembering the last-seen value.
+  return {
+    online: state.reportedOnline,
+    nearbyShareEnabled: result.nearbyShareEnabled === true,
+    hasOwnClouds: result.hasOwnClouds === true,
+    masterDeviceEnabled: result.masterDeviceEnabled === true,
+  };
 }
 
 export interface DeviceRecentFile {
@@ -276,10 +297,15 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
           pairedAt: d.pairedAt,
           online: status.online,
           nearbyShareEnabled: status.nearbyShareEnabled,
+          hasOwnClouds: status.hasOwnClouds,
+          masterDeviceEnabled: status.masterDeviceEnabled,
         };
       }),
     );
-    return { thisDevice: me, paired: withStatus };
+    // Master/Under is a relationship, not an OS — this device's own role is just its own current state,
+    // computed the exact same way a peer computes it about US via testConnection reading our /status.
+    const thisDeviceRole = { hasOwnClouds: backends.size > 0, masterDeviceEnabled: loadMasterDeviceEnabled() };
+    return { thisDevice: me, thisDeviceRole, paired: withStatus };
   });
 
   // Genuinely unpaired devices discovered via LAN broadcast — deliberately excludes anything already in
@@ -511,10 +537,7 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
         const name = req.body.key.split('/').pop() ?? req.body.key;
         const category = categoryForFile(name, req.body.mimeType);
         const appPath = category ? loadOpenWithPrefs()[category] : undefined;
-        const args = appPath ? ['-a', appPath, filePath] : [filePath];
-        execFile('open', args, (err) => {
-          if (err) app.log.error(err, 'failed to open device file');
-        });
+        openLocalFile(filePath, appPath, (err) => app.log.error(err, 'failed to open device file'));
         return { ok: true };
       } catch (err) {
         return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) });
@@ -579,6 +602,168 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
     },
   );
 
+  // Real OS folders on a paired desktop peer (Desktop/Downloads/Documents/Pictures/Videos/Music, custom
+  // shortcuts, Received) — as opposed to the /devices/:id/folders/* trio above, which browses the peer's
+  // CLOUD-backed folders. Same proxy shape as that existing family, just pointed at the peer's
+  // /local-folders/* routes instead of /folders/*.
+  app.get<{ Params: { id: string } }>('/devices/:id/local-folders', async (req, reply) => {
+    const peer = findPeer(req.params.id);
+    if (!peer) return reply.code(404).send({ error: 'device not paired' });
+    try {
+      const res = await fetch(`http://${peer.host}/local-folders`, { headers: { Authorization: `Bearer ${peer.token}` } });
+      if (!res.ok) return reply.code(502).send({ error: 'device unreachable' });
+      return res.json();
+    } catch (err) {
+      return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.get<{ Params: { id: string; folderId: string } }>('/devices/:id/local-folders/:folderId/files', async (req, reply) => {
+    const peer = findPeer(req.params.id);
+    if (!peer) return reply.code(404).send({ error: 'device not paired' });
+    try {
+      const res = await fetch(`http://${peer.host}/local-folders/${req.params.folderId}/files`, {
+        headers: { Authorization: `Bearer ${peer.token}` },
+      });
+      if (!res.ok) return reply.code(502).send({ error: 'device unreachable' });
+      return res.json();
+    } catch (err) {
+      return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.get<{ Params: { id: string; folderId: string }; Querystring: { key: string } }>(
+    '/devices/:id/local-folders/:folderId/download',
+    async (req, reply) => {
+      const peer = findPeer(req.params.id);
+      if (!peer) return reply.code(404).send({ error: 'device not paired' });
+      try {
+        const res = await fetch(
+          `http://${peer.host}/local-folders/${req.params.folderId}/download?key=${encodeURIComponent(req.query.key)}`,
+          { headers: { Authorization: `Bearer ${peer.token}` } },
+        );
+        if (!res.ok) return reply.code(502).send({ error: 'device unreachable' });
+        const buf = Buffer.from(await res.arrayBuffer());
+        logTransfer({
+          deviceId: peer.id,
+          deviceName: peer.name,
+          fileName: req.query.key.split('/').pop() ?? req.query.key,
+          direction: 'received',
+          size: buf.length,
+          path: 'Downloads (saved by browser)',
+        });
+        reply.header('Content-Type', 'application/octet-stream');
+        return reply.send(buf);
+      } catch (err) {
+        return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) });
+      }
+    },
+  );
+
+  app.post<{ Params: { id: string; folderId: string }; Querystring: { name: string } }>(
+    '/devices/:id/local-folders/:folderId/upload',
+    async (req, reply) => {
+      const peer = findPeer(req.params.id);
+      if (!peer) return reply.code(404).send({ error: 'device not paired' });
+      const { name } = req.query;
+      if (!name) return reply.code(400).send({ error: 'missing ?name=' });
+      try {
+        const from = getDeviceIdentity().name;
+        const res = await fetch(
+          `http://${peer.host}/local-folders/${req.params.folderId}/upload?name=${encodeURIComponent(name)}&from=${encodeURIComponent(from)}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/octet-stream', Authorization: `Bearer ${peer.token}` },
+            body: new Uint8Array(req.body as Buffer),
+          },
+        );
+        if (!res.ok) return reply.code(502).send({ error: 'device rejected the file' });
+        const result = await res.json();
+        logTransfer({
+          deviceId: peer.id,
+          deviceName: peer.name,
+          fileName: name,
+          direction: 'sent',
+          size: (req.body as Buffer).length,
+          path: `${req.params.folderId}/${name}`,
+        });
+        return result;
+      } catch (err) {
+        return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) });
+      }
+    },
+  );
+
+  app.delete<{ Params: { id: string; folderId: string }; Querystring: { key: string } }>(
+    '/devices/:id/local-folders/:folderId/file',
+    async (req, reply) => {
+      const peer = findPeer(req.params.id);
+      if (!peer) return reply.code(404).send({ error: 'device not paired' });
+      try {
+        const res = await fetch(
+          `http://${peer.host}/local-folders/${req.params.folderId}/file?key=${encodeURIComponent(req.query.key)}`,
+          { method: 'DELETE', headers: { Authorization: `Bearer ${peer.token}` } },
+        );
+        if (!res.ok) return reply.code(502).send({ error: 'device rejected the delete' });
+        return { ok: true };
+      } catch (err) {
+        return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) });
+      }
+    },
+  );
+
+  app.patch<{ Params: { id: string; folderId: string }; Body: { key: string; newName: string } }>(
+    '/devices/:id/local-folders/:folderId/file',
+    async (req, reply) => {
+      const peer = findPeer(req.params.id);
+      if (!peer) return reply.code(404).send({ error: 'device not paired' });
+      const { key, newName } = req.body;
+      if (!key || !newName) return reply.code(400).send({ error: 'missing key or newName' });
+      try {
+        const res = await fetch(
+          `http://${peer.host}/local-folders/${req.params.folderId}/file?key=${encodeURIComponent(key)}&newName=${encodeURIComponent(newName)}`,
+          { method: 'PATCH', headers: { Authorization: `Bearer ${peer.token}` } },
+        );
+        if (!res.ok) return reply.code(502).send({ error: 'device rejected the rename' });
+        return { ok: true };
+      } catch (err) {
+        return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) });
+      }
+    },
+  );
+
+  app.post<{ Params: { id: string; folderId: string }; Body: { key: string; mimeType?: string } }>(
+    '/devices/:id/local-folders/:folderId/cache-path',
+    async (req, reply) => {
+      const peer = findPeer(req.params.id);
+      if (!peer) return reply.code(404).send({ error: 'device not paired' });
+      try {
+        const filePath = await resolveDeviceCachedPath(peer, req.params.folderId, req.body.key, req.body.mimeType, 'local-folder');
+        return { ok: true, path: filePath };
+      } catch (err) {
+        return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) });
+      }
+    },
+  );
+
+  app.post<{ Params: { id: string; folderId: string }; Body: { key: string; mimeType?: string } }>(
+    '/devices/:id/local-folders/:folderId/open',
+    async (req, reply) => {
+      const peer = findPeer(req.params.id);
+      if (!peer) return reply.code(404).send({ error: 'device not paired' });
+      try {
+        const filePath = await resolveDeviceCachedPath(peer, req.params.folderId, req.body.key, req.body.mimeType, 'local-folder');
+        const name = req.body.key.split('/').pop() ?? req.body.key;
+        const category = categoryForFile(name, req.body.mimeType);
+        const appPath = category ? loadOpenWithPrefs()[category] : undefined;
+        openLocalFile(filePath, appPath, (err) => app.log.error(err, 'failed to open device local file'));
+        return { ok: true };
+      } catch (err) {
+        return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) });
+      }
+    },
+  );
+
   // pulls a file's bytes straight from the phone and pushes them into a chosen cloud service — the phone
   // never talks to the cloud provider directly, this Mac is just relaying the bytes through in one request.
   app.post<{ Params: { id: string; folderId: string }; Body: { key: string; destProviderId: string; destFolderId?: string } }>(
@@ -616,13 +801,13 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
     folderId: string,
     key: string,
     mimeType?: string,
-    kind: 'folder' | 'sync-pair' = 'folder',
+    kind: 'folder' | 'sync-pair' | 'local-folder' = 'folder',
   ): Promise<string> {
     const providerKey = `device:${peer.id}:${kind}:${folderId}`;
     const cached = getCachedPath(providerKey, key);
     if (cached) return cached;
 
-    const remotePath = kind === 'sync-pair' ? `sync-pairs/${folderId}` : `folders/${folderId}`;
+    const remotePath = kind === 'sync-pair' ? `sync-pairs/${folderId}` : kind === 'local-folder' ? `local-folders/${folderId}` : `folders/${folderId}`;
     const res = await fetch(`http://${peer.host}/${remotePath}/download?key=${encodeURIComponent(key)}`, {
       headers: { Authorization: `Bearer ${peer.token}` },
     });
@@ -659,10 +844,7 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
         const name = req.body.key.split('/').pop() ?? req.body.key;
         const category = categoryForFile(name, req.body.mimeType);
         const appPath = category ? loadOpenWithPrefs()[category] : undefined;
-        const args = appPath ? ['-a', appPath, filePath] : [filePath];
-        execFile('open', args, (err) => {
-          if (err) app.log.error(err, 'failed to open device file');
-        });
+        openLocalFile(filePath, appPath, (err) => app.log.error(err, 'failed to open device file'));
         return { ok: true };
       } catch (err) {
         return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) });

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
+import { deviceNounLower } from '../lib/platformLabels';
 
 const API_BASE = 'http://localhost:4310';
 const MAX_IMAGES = 5;
@@ -53,7 +54,7 @@ export function RecordLogModal({ onClose, onSaved }: { onClose: () => void; onSa
       }
     >
       <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', marginBottom: 10 }}>
-        Describe what went wrong — this gets saved to a log file on your Mac that you can send us from the Error Logs section below.
+        Describe what went wrong — this gets saved to a log file on {deviceNounLower} that you can send us from the Error Logs section below.
       </div>
 
       <textarea

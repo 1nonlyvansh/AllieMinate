@@ -7,7 +7,8 @@ import { DropdownMenu } from './components/DropdownMenu';
 import { NearbyPickerModal } from './components/NearbyPickerModal';
 import { usePairedDevices, buildSendMenuItems, sendFileToDevice, SendableFile } from './lib/sendActions';
 import { formatBytes, timeAgo, broadCategorize } from './lib/format';
-import { IconMac, IconHome, IconCloud, IconDevices, IconDownload, IconCopy, IconShare } from './icons';
+import { IconMac, IconWindows, IconHome, IconCloud, IconDevices, IconDownload, IconCopy, IconShare } from './icons';
+import { isWindows, thisDeviceLabel, deviceNounLower, fileBrowserName } from './lib/platformLabels';
 import { CLOUD_ICONS } from './lib/cloudIcons';
 
 const API_BASE = 'http://localhost:4310';
@@ -372,7 +373,7 @@ function MacRecentStrip({ onShareNearby }: { onShareNearby: (file: SendableFile,
         </div>
       )}
       {shown !== null && shown.length === 0 && (
-        <div className="tray-device-strip-empty">No recent files on this Mac</div>
+        <div className="tray-device-strip-empty">No recent files on {deviceNounLower}</div>
       )}
       {shown !== null && shown.length > 0 && (
         <div className="tray-device-strip-row">
@@ -581,6 +582,8 @@ export function TrayPanel(): JSX.Element {
   return (
     <div
       className="tray-panel"
+      onMouseEnter={() => window.alliminate.keepPanelOpen()}
+      onMouseLeave={() => window.alliminate.notifyPanelHoverLeave()}
       onDragEnter={(e) => {
         e.preventDefault();
         setDropError(null);
@@ -604,7 +607,7 @@ export function TrayPanel(): JSX.Element {
         if (paths.length > 0) {
           window.alliminate.dropFilesInPanel(paths);
         } else if (e.dataTransfer.files.length > 0) {
-          setDropError("Couldn't read that as a file — try dragging it from Finder instead.");
+          setDropError(`Couldn't read that as a file — try dragging it from ${fileBrowserName} instead.`);
         }
       }}
     >
@@ -629,21 +632,21 @@ export function TrayPanel(): JSX.Element {
               label="Cloud Transfer"
               hint="Save to a connected cloud"
               onFilesDropped={(paths) => window.alliminate.dropFilesInPanel(paths, 'cloud')}
-              onEmpty={() => setDropError("Couldn't read that as a file — try dragging it from Finder instead.")}
+              onEmpty={() => setDropError(`Couldn't read that as a file — try dragging it from ${fileBrowserName} instead.`)}
             />
             <DropZone
               icon={<IconDevices size={22} />}
               label="Devices"
               hint="Share to a paired device"
               onFilesDropped={(paths) => window.alliminate.dropFilesInPanel(paths, 'device')}
-              onEmpty={() => setDropError("Couldn't read that as a file — try dragging it from Finder instead.")}
+              onEmpty={() => setDropError(`Couldn't read that as a file — try dragging it from ${fileBrowserName} instead.`)}
             />
             <DropZone
               icon={<IconShare size={22} />}
               label="Share Nearby"
               hint="Instant send to a nearby device"
               onFilesDropped={(paths) => window.alliminate.dropFilesInPanel(paths, 'nearby')}
-              onEmpty={() => setDropError("Couldn't read that as a file — try dragging it from Finder instead.")}
+              onEmpty={() => setDropError(`Couldn't read that as a file — try dragging it from ${fileBrowserName} instead.`)}
             />
           </div>
           {dropError && <div className="empty-state" style={{ padding: '10px 0', color: 'var(--offline)', fontSize: 11.5 }}>{dropError}</div>}
@@ -723,8 +726,8 @@ export function TrayPanel(): JSX.Element {
                   className="tray-device-row clickable"
                   onClick={() => setMacExpanded((v) => !v)}
                 >
-                  <IconMac size={16} />
-                  <span>This Mac</span>
+                  {isWindows ? <IconWindows size={16} /> : <IconMac size={16} />}
+                  <span>{thisDeviceLabel}</span>
                   <span className="status-pill online" style={{ marginLeft: 'auto' }}>
                     <span className="status-dot online" /> Online
                   </span>
@@ -793,21 +796,21 @@ export function TrayPanel(): JSX.Element {
                   label="Cloud Transfer"
                   hint="Save to a connected cloud"
                   onFilesDropped={(paths) => window.alliminate.dropFilesInPanel(paths, 'cloud')}
-                  onEmpty={() => setDropError("Couldn't read that as a file — try dragging it from Finder instead.")}
+                  onEmpty={() => setDropError(`Couldn't read that as a file — try dragging it from ${fileBrowserName} instead.`)}
                 />
                 <DropZone
                   icon={<IconDevices size={22} />}
                   label="Devices"
                   hint="Share to a paired device"
                   onFilesDropped={(paths) => window.alliminate.dropFilesInPanel(paths, 'device')}
-                  onEmpty={() => setDropError("Couldn't read that as a file — try dragging it from Finder instead.")}
+                  onEmpty={() => setDropError(`Couldn't read that as a file — try dragging it from ${fileBrowserName} instead.`)}
                 />
                 <DropZone
                   icon={<IconShare size={22} />}
                   label="Share Nearby"
                   hint="Instant send to a nearby device"
                   onFilesDropped={(paths) => window.alliminate.dropFilesInPanel(paths, 'nearby')}
-                  onEmpty={() => setDropError("Couldn't read that as a file — try dragging it from Finder instead.")}
+                  onEmpty={() => setDropError(`Couldn't read that as a file — try dragging it from ${fileBrowserName} instead.`)}
                 />
               </div>
               {dropError && <div className="empty-state" style={{ padding: '6px 0', color: 'var(--offline)', fontSize: 11.5 }}>{dropError}</div>}

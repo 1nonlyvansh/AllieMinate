@@ -3,7 +3,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
-import { execSync, execFile } from 'node:child_process';
+import { openLocalFile, openExternalUrl } from '../openLauncher';
 import { loadPhotosAccounts, savePhotosAccounts, nextPhotosAccountId } from '../photosAccounts';
 import { getPickedItems, addPickedItems, removePickedForAccount, removePickedItem } from '../photosPicked';
 import { loadPairedDevices } from '../pairing';
@@ -140,9 +140,7 @@ export function registerPhotosRoutes(app: FastifyInstance): void {
         const filePath = path.join(tempDir, filename);
         fs.writeFileSync(filePath, buf);
 
-        execFile('open', [filePath], (err) => {
-          if (err) app.log.error(err, 'failed to open photo');
-        });
+        openLocalFile(filePath, undefined, (err) => app.log.error(err, 'failed to open photo'));
         return { ok: true };
       } catch (err) {
         return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) });
@@ -441,7 +439,7 @@ export function registerPhotosRoutes(app: FastifyInstance): void {
 
     photosServer.listen(PHOTOS_OAUTH_PORT, () => {
       try {
-        execSync(`open "${authUrl}"`);
+        openExternalUrl(authUrl);
       } catch {
         // couldn't auto-open — the frontend still has the authUrl to show
       }

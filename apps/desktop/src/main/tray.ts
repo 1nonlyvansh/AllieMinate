@@ -1,6 +1,5 @@
-import { Tray, BrowserWindow, nativeImage, screen, ipcMain, clipboard } from 'electron';
+import { Tray, BrowserWindow, nativeImage, screen, ipcMain, clipboard, Menu, app } from 'electron';
 import path from 'node:path';
-import os from 'node:os';
 import fs from 'node:fs/promises';
 import { injectThemeCss } from './platform/injectTheme';
 import { showMainWindow } from './index';
@@ -203,6 +202,9 @@ function createPanel(): BrowserWindow {
   win.setAlwaysOnTop(true, 'floating');
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
+  // glass.css (not windows/fluent.css) on purpose here — it's the only stylesheet with the .tray-panel/
+  // .tray-drop-* classes this panel actually uses; its dark flyout look has no vibrancy/blur dependency,
+  // so it renders correctly on Windows as a plain solid-dark popup without needing a Windows equivalent.
   injectThemeCss(win, 'mac/glass.css');
   win.loadFile(path.join(__dirname, '../../src/renderer/trayPanel.html'));
 
@@ -212,35 +214,70 @@ function createPanel(): BrowserWindow {
   return win;
 }
 
+const PANEL_WIDTH = 368;
+const PANEL_HEIGHT = 480;
+
+// macOS always has the tray icon in a top menu bar, so "panel appears below the icon" was a safe
+// assumption. Windows' taskbar (and tray icon with it) is usually bottom-anchored but can be dragged to
+// any of the four screen edges — so instead of assuming an edge, diff the display's full bounds against
+// its workArea to find which side is actually occluded by the taskbar/menu bar, then place the panel on
+// the opposite side of the tray icon from that edge, clamped within the visible work area on both axes.
 function positionPanelNearTray(win: BrowserWindow): void {
   if (!tray) return;
   const trayBounds = tray.getBounds();
-  const display = screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y });
-  const panelWidth = 368;
+  const { bounds, workArea } = screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y });
+  // zero — any real gap here is a dead zone with no window coverage at all, and the cursor crossing it
+  // between the tray's 'mouse-leave' and the panel's 'mouse-enter' is what let the hide timer fire before
+  // the panel ever caught the hover. The panel's edge should touch the tray icon's bounds exactly; the
+  // debounce timer (see scheduleHideDropPanel) is what actually absorbs the crossing, not extra geometry.
+  const gap = 0;
 
-  let x = Math.round(trayBounds.x + trayBounds.width / 2 - panelWidth / 2);
-  x = Math.max(display.workArea.x + 8, Math.min(x, display.workArea.x + display.workArea.width - panelWidth - 8));
-  const y = Math.round(trayBounds.y + trayBounds.height + 4);
+  const topGap = workArea.y - bounds.y;
+  const bottomGap = bounds.y + bounds.height - (workArea.y + workArea.height);
+  const leftGap = workArea.x - bounds.x;
+  const rightGap = bounds.x + bounds.width - (workArea.x + workArea.width);
+  const maxGap = Math.max(topGap, bottomGap, leftGap, rightGap);
 
-  win.setPosition(x, y, false);
-}
-
-function togglePanel(): void {
-  if (!tray) return;
-  if (!panel || panel.isDestroyed()) panel = createPanel();
-
-  if (panel.isVisible()) {
-    panel.hide();
-    return;
+  let x: number;
+  let y: number;
+  if (maxGap === leftGap && leftGap > 0) {
+    x = trayBounds.x + trayBounds.width + gap;
+    y = Math.round(trayBounds.y + trayBounds.height / 2 - PANEL_HEIGHT / 2);
+  } else if (maxGap === rightGap && rightGap > 0) {
+    x = trayBounds.x - PANEL_WIDTH - gap;
+    y = Math.round(trayBounds.y + trayBounds.height / 2 - PANEL_HEIGHT / 2);
+  } else if (maxGap === bottomGap && bottomGap > 0) {
+    x = Math.round(trayBounds.x + trayBounds.width / 2 - PANEL_WIDTH / 2);
+    y = trayBounds.y - PANEL_HEIGHT - gap;
+  } else {
+    // top taskbar/menu bar (macOS default) or no edge detected — panel appears below the icon
+    x = Math.round(trayBounds.x + trayBounds.width / 2 - PANEL_WIDTH / 2);
+    y = trayBounds.y + trayBounds.height + gap;
   }
 
+  x = Math.max(workArea.x + 8, Math.min(x, workArea.x + workArea.width - PANEL_WIDTH - 8));
+  y = Math.max(workArea.y + 8, Math.min(y, workArea.y + workArea.height - PANEL_HEIGHT - 8));
+
+  win.setPosition(Math.round(x), Math.round(y), false);
+}
+
+// hover shows the panel as a preview (no OS focus stolen — showInactive), independent of the drag/drop
+// flow's own show/hide calls. Reuses the same dragLeaveTimer/scheduleHideDropPanel grace-period pair the
+// drag flow already relies on (renderer sends 'tray:keepPanelOpen' on entering the panel content, and a
+// new 'tray:panelHoverLeave' on leaving it) rather than polling cursor position against tray/panel bounds
+// — a poll-based approach is fooled by Windows display-scaling mismatches between screen.getCursorScreenPoint()
+// and Tray.getBounds(), which is exactly what made the panel flash and vanish on the first hover attempt.
+function showPanelOnHover(): void {
+  if (!tray) return;
+  if (!panel || panel.isDestroyed()) panel = createPanel();
   positionPanelNearTray(panel);
-  panel.show();
-  panel.focus();
-  // plain reload() can still serve the JS bundle and any GET responses from Chromium's HTTP cache — this
-  // panel needs to reflect settings the user may have JUST changed (Menu Bar Icon Settings' cloud filter,
-  // for one), so a normal reload isn't enough; force a real re-fetch of everything, bundle included.
-  panel.webContents.reloadIgnoringCache();
+  if (!panel.isVisible()) {
+    panel.showInactive();
+    // plain reload() can still serve the JS bundle and any GET responses from Chromium's HTTP cache — this
+    // panel needs to reflect settings the user may have JUST changed (Menu Bar Icon Settings' cloud filter,
+    // for one), so a normal reload isn't enough; force a real re-fetch of everything, bundle included.
+    panel.webContents.reloadIgnoringCache();
+  }
 }
 
 function clearDragLeaveTimer(): void {
@@ -266,7 +303,7 @@ function scheduleHideDropPanel(): void {
   dragLeaveTimer = setTimeout(() => {
     dragLeaveTimer = null;
     if (!pendingDropFiles && panel && !panel.isDestroyed()) panel.hide();
-  }, 250);
+  }, 200);
 }
 
 function handleFilesDropped(filePaths: string[], kind: 'cloud' | 'device' | 'nearby' | 'both' = 'both'): void {
@@ -286,6 +323,23 @@ function cancelDrop(): void {
 // cached by URL so dragging right after copying (or vice versa) doesn't re-download.
 const tempFileCache = new Map<string, string>();
 
+// dedicated, OS-appropriate cache directory — this used to land straight in the shared OS temp folder
+// with nothing ever cleaning it up. Resolved lazily (not at module load) so it picks up app.setName()'s
+// corrected app identity, which index.ts sets before ever touching the tray; on Windows this explicitly
+// targets %LOCALAPPDATA% (cache is disposable/regenerable, it shouldn't roam), falling back to the
+// standard per-OS userData location elsewhere (already ~/Library/Application Support/AllieMinate on mac).
+let trayCacheDirPromise: Promise<string> | null = null;
+function ensureTrayCacheDir(): Promise<string> {
+  if (!trayCacheDirPromise) {
+    const base = process.platform === 'win32' && process.env.LOCALAPPDATA
+      ? path.join(process.env.LOCALAPPDATA, app.getName())
+      : app.getPath('userData');
+    const dir = path.join(base, 'FileCache');
+    trayCacheDirPromise = fs.mkdir(dir, { recursive: true }).then(() => dir);
+  }
+  return trayCacheDirPromise;
+}
+
 async function downloadToTemp(url: string, filename: string): Promise<{ ok: boolean; path?: string; error?: string }> {
   const cached = tempFileCache.get(url);
   if (cached) return { ok: true, path: cached };
@@ -293,7 +347,8 @@ async function downloadToTemp(url: string, filename: string): Promise<{ ok: bool
     const res = await fetch(url);
     if (!res.ok) return { ok: false, error: `download failed (${res.status})` };
     const buf = Buffer.from(await res.arrayBuffer());
-    const tempPath = path.join(os.tmpdir(), `alliminate-${Date.now()}-${filename}`);
+    const cacheDir = await ensureTrayCacheDir();
+    const tempPath = path.join(cacheDir, `${Date.now()}-${filename}`);
     await fs.writeFile(tempPath, buf);
     tempFileCache.set(url, tempPath);
     return { ok: true, path: tempPath };
@@ -302,8 +357,19 @@ async function downloadToTemp(url: string, filename: string): Promise<{ ok: bool
   }
 }
 
+function buildTrayContextMenu(): Menu {
+  return Menu.buildFromTemplate([
+    { label: 'Open AllieMinate', click: () => { panel?.hide(); showMainWindow(); } },
+    { type: 'separator' },
+    { label: 'Quit AllieMinate', click: () => app.quit() },
+  ]);
+}
+
 export function createTray(): void {
-  const icon = nativeImage.createFromPath(path.join(__dirname, '../../assets/trayIcon.png'));
+  // source asset is a 22px/44px@2x macOS menu-bar icon; Windows' notification-area convention is a
+  // smaller 16px square, so shrink it at runtime rather than shipping a separate pre-baked asset.
+  let icon = nativeImage.createFromPath(path.join(__dirname, '../../assets/trayIcon.png'));
+  if (process.platform === 'win32') icon = icon.resize({ width: 16, height: 16 });
   tray = new Tray(icon);
   tray.setToolTip('AllieMinate');
 
@@ -334,10 +400,15 @@ export function createTray(): void {
     cancelDrop();
   });
 
-  // the panel's own drop zone reports hover so we don't auto-hide while the cursor is over it,
-  // not just over the tiny tray icon (matches O+ Connect's drop-anywhere-in-the-panel behavior).
+  // the panel content reports its own hover state so we don't auto-hide while the cursor is over it, not
+  // just over the tiny tray icon — shared by the drag flow (matches O+ Connect's drop-anywhere-in-the-panel
+  // behavior) and by plain mouse hover, since both just mean "the user is still interacting with this".
   ipcMain.handle('tray:keepPanelOpen', () => {
     clearDragLeaveTimer();
+  });
+
+  ipcMain.handle('tray:panelHoverLeave', () => {
+    scheduleHideDropPanel();
   });
 
   ipcMain.handle('tray:filesDroppedInPanel', (_e, filePaths: string[], kind?: 'cloud' | 'device' | 'nearby') => {
@@ -388,8 +459,27 @@ export function createTray(): void {
     sendPanelState({ mode: 'drop', status: 'done', sentTo: targetName, progress: [...progress] });
   });
 
+  // hovering previews the panel (recent files, quick actions); clicking opens the full app window instead
+  // of toggling the panel — the panel is a glanceable preview, not the click target.
+  tray.on('mouse-enter', () => {
+    clearDragLeaveTimer();
+    showPanelOnHover();
+  });
+
+  tray.on('mouse-leave', () => {
+    scheduleHideDropPanel();
+  });
+
   tray.on('click', () => {
-    togglePanel();
+    panel?.hide();
+    clearDragLeaveTimer();
+    showMainWindow();
+  });
+
+  // Windows convention: right-click shows a context menu (there's no Dock/Cmd+Q route to quit on
+  // Windows, so this is also the only in-UI way to quit there — worth having on macOS too).
+  tray.on('right-click', () => {
+    tray?.popUpContextMenu(buildTrayContextMenu());
   });
 
   // macOS-only: fires while a Finder drag hovers over the tray icon, before drop.

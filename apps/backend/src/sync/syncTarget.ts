@@ -27,21 +27,30 @@ export class DeviceSyncTarget implements SyncTarget {
     private peer: PairedDevice,
     private remoteFolderId: string,
     private isAndroid: boolean,
+    // 'local-folder' points this at a peer's REAL OS folder (Desktop/Downloads/a custom shortcut — see
+    // localFolders.ts) instead of one of its cloud-backed FolderConfig folders. Same four HTTP calls,
+    // just against /local-folders/* instead of /folders/* on the peer — the reconciliation engine above
+    // this class neither knows nor cares which kind of folder it's syncing against.
+    private remoteKind: 'folder' | 'local-folder' = 'folder',
   ) {}
 
   private authHeaders(): Record<string, string> {
     return { Authorization: `Bearer ${this.peer.token}` };
   }
 
+  private get basePath(): string {
+    return this.remoteKind === 'local-folder' ? 'local-folders' : 'folders';
+  }
+
   async list(_prefix: string): Promise<FileEntry[]> {
-    const res = await fetch(`http://${this.peer.host}/folders/${this.remoteFolderId}/files`, { headers: this.authHeaders() });
+    const res = await fetch(`http://${this.peer.host}/${this.basePath}/${this.remoteFolderId}/files`, { headers: this.authHeaders() });
     if (!res.ok) throw new Error(`device unreachable (${res.status})`);
     const data = await res.json();
     return (data.files ?? []) as FileEntry[];
   }
 
   async get(key: string): Promise<Buffer> {
-    const res = await fetch(`http://${this.peer.host}/folders/${this.remoteFolderId}/download?key=${encodeURIComponent(key)}`, {
+    const res = await fetch(`http://${this.peer.host}/${this.basePath}/${this.remoteFolderId}/download?key=${encodeURIComponent(key)}`, {
       headers: this.authHeaders(),
     });
     if (!res.ok) throw new Error(`device unreachable (${res.status})`);
@@ -51,7 +60,8 @@ export class DeviceSyncTarget implements SyncTarget {
   // Phase 6 prep: the Android degradation only actually applies to the fixed "received" bucket (its one
   // writable target today) — keying it off `remoteFolderId === 'received'` instead of `isAndroid`
   // unconditionally means the desktop side already does the right thing the moment Android gains real
-  // arbitrary-folder routes for some OTHER folder id, no desktop change needed when that lands.
+  // arbitrary-folder routes for some OTHER folder id, no desktop change needed when that lands. Android
+  // has no Local Folders concept at all, so this is always false whenever remoteKind is 'local-folder'.
   private get isFixedAndroidInbox(): boolean {
     return this.isAndroid && this.remoteFolderId === 'received';
   }
@@ -59,7 +69,7 @@ export class DeviceSyncTarget implements SyncTarget {
   async put(key: string, data: Buffer): Promise<void> {
     const name = key.split('/').pop() ?? key;
     const targetFolder = this.isFixedAndroidInbox ? 'received' : this.remoteFolderId;
-    const res = await fetch(`http://${this.peer.host}/folders/${targetFolder}/upload?name=${encodeURIComponent(name)}`, {
+    const res = await fetch(`http://${this.peer.host}/${this.basePath}/${targetFolder}/upload?name=${encodeURIComponent(name)}`, {
       method: 'POST',
       headers: { ...this.authHeaders(), 'Content-Type': 'application/octet-stream' },
       body: new Uint8Array(data),
@@ -69,7 +79,7 @@ export class DeviceSyncTarget implements SyncTarget {
 
   async delete(key: string): Promise<void> {
     if (this.isFixedAndroidInbox) return; // no delete route on the phone's "received" bucket — see class comment
-    const res = await fetch(`http://${this.peer.host}/folders/${this.remoteFolderId}/file?key=${encodeURIComponent(key)}`, {
+    const res = await fetch(`http://${this.peer.host}/${this.basePath}/${this.remoteFolderId}/file?key=${encodeURIComponent(key)}`, {
       method: 'DELETE',
       headers: this.authHeaders(),
     });

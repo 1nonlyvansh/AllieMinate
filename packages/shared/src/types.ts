@@ -26,6 +26,10 @@ export interface FolderConfig {
   /** the folder id ON THE PAIRED DEVICE'S OWN SIDE to sync against — e.g. "received" for an Android peer
    * (its only writable target) or another FolderConfig id for a Mac/Windows peer. */
   syncDeviceFolderId?: string;
+  /** which of the peer's folder namespaces syncDeviceFolderId lives in — 'folder' (default, back-compat)
+   * means one of the peer's cloud-backed FolderConfig folders; 'local-folder' means one of its real OS
+   * folders (Desktop/Downloads/a custom shortcut) with no cloud account involved at all. */
+  syncDeviceFolderKind?: 'folder' | 'local-folder';
   /** Phase 5 — 'two-way' (default when absent, matches original behavior) propagates changes/deletes both
    * ways; 'backup-only' pushes local→remote and never deletes remotely even if the local copy is deleted;
    * 'download-only' pulls remote→local and never pushes local edits at all. */
@@ -102,6 +106,9 @@ export interface SyncPair {
   deviceId?: string;
   /** the folder id ON THE PAIRED DEVICE'S OWN SIDE — e.g. "received" for Android. */
   deviceFolderId?: string;
+  /** which of the peer's folder namespaces deviceFolderId lives in — see FolderConfig.syncDeviceFolderKind
+   * for the same distinction ('folder' = cloud-backed, 'local-folder' = a real OS folder, no cloud). */
+  deviceFolderKind?: 'folder' | 'local-folder';
   /** destination path/prefix within the target. */
   remotePath: string;
   /** 'two-way' propagates changes/deletes both ways; 'backup-only' pushes local→remote and never deletes

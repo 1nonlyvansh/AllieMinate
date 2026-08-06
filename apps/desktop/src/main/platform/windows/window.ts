@@ -1,5 +1,6 @@
 import { BrowserWindow, nativeTheme, shell } from 'electron';
 import { injectThemeCss } from '../injectTheme';
+import { registerZoomShortcuts } from '../zoomShortcuts';
 
 function overlayOptions(): Electron.TitleBarOverlay {
   return nativeTheme.shouldUseDarkColors
@@ -33,8 +34,14 @@ export function createWindow(preloadPath: string): BrowserWindow {
   });
 
   nativeTheme.on('updated', () => win.setTitleBarOverlay(overlayOptions()));
+  registerZoomShortcuts(win);
 
-  injectThemeCss(win, 'windows/fluent.css');
+  // windows/fluent.css only ever grew a handful of top-level classes (app-header, glass-panel) — it never
+  // got the sidebar/folder-grid/modal/table classes App.tsx actually renders, so wiring it up here left
+  // the whole app unstyled. mac/glass.css has full component coverage and no vibrancy/blur dependency (its
+  // backdrop-filter blur is plain CSS, not an OS material), and its font-family already falls through to
+  // system-ui when -apple-system/SF Pro aren't available — Chromium resolves that to Segoe UI on Windows.
+  injectThemeCss(win, 'mac/glass.css');
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);

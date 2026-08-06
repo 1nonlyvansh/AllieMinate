@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
+import { biometricName } from '../lib/platformLabels';
 
 export function SetPinModal({
   onClose,
@@ -47,7 +48,7 @@ export function SetPinModal({
       }
     >
       <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', marginBottom: 4 }}>
-        This PIN unlocks AllieMinate when Touch ID isn't available. It's stored encrypted via your Mac's keychain.
+        This PIN unlocks AllieMinate when {biometricName} isn't available. It's stored encrypted via your device's secure storage.
       </div>
       <div>
         <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginBottom: 4 }}>PIN (4–8 digits)</div>

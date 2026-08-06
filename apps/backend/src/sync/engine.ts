@@ -24,7 +24,7 @@ function resolveSyncTarget(folder: FolderConfig, backend: StorageBackend | undef
   if (!folder.syncDeviceId || !folder.syncDeviceFolderId) return null;
   const peer = loadPairedDevices().find((d) => d.id === folder.syncDeviceId);
   if (!peer) return null;
-  return new DeviceSyncTarget(peer, folder.syncDeviceFolderId, peer.platform === 'android');
+  return new DeviceSyncTarget(peer, folder.syncDeviceFolderId, peer.platform === 'android', folder.syncDeviceFolderKind ?? 'folder');
 }
 
 // One interval per folder, tracked so it can actually be torn down again — without this, disabling
@@ -79,7 +79,7 @@ export function pauseAutoSyncForFolder(folderId: string): void {
   pausedFolderIds.add(folderId);
 }
 
-export function resumeAutoSyncForFolder(folder: FolderConfig, backend: StorageBackend): void {
+export function resumeAutoSyncForFolder(folder: FolderConfig, backend: StorageBackend | undefined): void {
   pausedFolderIds.delete(folder.id);
   startAutoSyncForFolder(folder, backend);
 }
@@ -105,8 +105,12 @@ export function startAutoSyncForFolder(folder: FolderConfig, backend: StorageBac
 
 // The always-on local→remote push, extracted to module scope (was a SyncEngine private method) so it's
 // reusable for freestanding Sync Pairs too — a pair adapted to FolderConfig shape goes through the exact
-// same push/record/emit path as a pinned folder, no separate code path to keep in sync.
-async function syncFolderEvent(folder: FolderConfig, backend: StorageBackend, event: WatchEvent): Promise<void> {
+// same push/record/emit path as a pinned folder, no separate code path to keep in sync. Takes a SyncTarget
+// rather than a full StorageBackend — this function only ever calls .put/.delete, both already part of
+// SyncTarget's contract, so a device-target pair's live watcher can push through a DeviceSyncTarget the
+// exact same way a cloud-target pair pushes through its StorageBackend (every StorageBackend already
+// structurally satisfies SyncTarget, so every existing call site keeps working unchanged).
+async function syncFolderEvent(folder: FolderConfig, backend: SyncTarget, event: WatchEvent): Promise<void> {
   // 'download-only' never pushes anything local→remote, live watcher included — the whole point is this
   // folder only ever receives. 'backup-only' still pushes content (that's the backup), it just never lets
   // a local delete propagate as a remote delete, so the "backup" can't be wiped out by a local mistake.
@@ -200,6 +204,7 @@ function syncPairToFolderLike(pair: SyncPair): FolderConfig {
     syncTargetKind: pair.targetKind,
     syncDeviceId: pair.deviceId,
     syncDeviceFolderId: pair.deviceFolderId,
+    syncDeviceFolderKind: pair.deviceFolderKind,
     direction: pair.direction,
   };
 }
@@ -209,18 +214,24 @@ const activePairWatchers = new Map<string, FSWatcher>();
 export function startSyncPair(pair: SyncPair, backends: Map<string, StorageBackend>): void {
   stopSyncPairWatch(pair.id); // guard against double-starting
 
-  // A pinned folder always has a home cloud account, so its push watcher can always target
-  // backend.put/delete regardless of what Auto-Sync's reconciliation side is pointed at. A freestanding
-  // device-target Sync Pair has no home cloud at all — syncFolderEvent's push path needs a real
-  // StorageBackend, which doesn't exist here. Device Sync Pairs are Phase 6 scope (their own engine
-  // wiring through the SyncTarget abstraction instead); until then this is a defensive no-op, not a
-  // silent crash waiting to happen.
+  const folder = syncPairToFolderLike(pair);
+
   if (pair.targetKind === 'device') {
-    console.warn(`Sync Pair "${pair.name}" targets a device — not supported yet, skipping`);
+    // no home cloud account here — the live watcher pushes straight through a DeviceSyncTarget instead
+    // of a StorageBackend (syncFolderEvent accepts either, see its own comment). resolveSyncTarget is the
+    // same helper Auto-Sync's periodic reconciliation already uses for a device target, reused here so
+    // there's exactly one place that knows how to turn (peer id, remote folder id/kind) into a live target.
+    const target = resolveSyncTarget(folder, undefined);
+    if (!target) {
+      console.warn(`Sync Pair "${pair.name}" — paired device ${pair.deviceId} not reachable, skipping`);
+      return;
+    }
+    const watcher = watchFolder(pair.localPath, (event) => syncFolderEvent(folder, target, event));
+    activePairWatchers.set(pair.id, watcher);
+    startAutoSyncForFolder(folder, undefined);
     return;
   }
 
-  const folder = syncPairToFolderLike(pair);
   const backend = backends.get(pair.providerId ?? '');
   if (!backend) {
     console.warn(`Sync Pair "${pair.name}" — provider ${pair.providerId} not configured, skipping`);

@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify';
-import { execFile } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import { isAllowedLocalPath } from '../localFiles';
@@ -22,6 +21,7 @@ import {
   saveOpenWithPref,
   OpenWithCategory,
 } from '../openWith';
+import { openLocalFile } from '../openLauncher';
 
 const CATEGORIES: OpenWithCategory[] = ['pdf', 'docx', 'spreadsheet', 'pptx', 'image', 'video', 'audio'];
 
@@ -91,10 +91,7 @@ export function registerLocalOpenRoutes(
       const category = categoryForFile(name, mimeType);
       const appPath = category ? loadOpenWithPrefs()[category] : undefined;
 
-      const args = appPath ? ['-a', appPath, filePath] : [filePath];
-      execFile('open', args, (err) => {
-        if (err) app.log.error(err, 'failed to open file');
-      });
+      openLocalFile(filePath, appPath, (err) => app.log.error(err, 'failed to open file'));
 
       broadcastContinuity({ fileName: name, providerId: providerKey, key, mimeType });
 

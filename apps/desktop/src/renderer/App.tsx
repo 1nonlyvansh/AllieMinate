@@ -339,7 +339,7 @@ export function App(): JSX.Element {
         {view === 'share' && <ShareView />}
         {view === 'trash' && <TrashView />}
         {view === 'settings' && (
-          <SettingsView connected={status?.providers ?? []} storage={storage} onRefresh={() => refreshRef.current()} />
+          <SettingsView connected={status?.providers ?? []} storage={storage} onRefresh={() => refreshRef.current()} onGoToDevices={() => setView('devices')} />
         )}
       </main>
 

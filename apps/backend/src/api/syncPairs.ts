@@ -37,14 +37,49 @@ export function registerSyncPairRoutes(app: FastifyInstance, backends: Map<strin
   });
 
   app.post<{
-    Body: { name: string; localPath: string; providerId: string; direction?: 'two-way' | 'backup-only' | 'download-only'; createInCloud?: boolean };
+    Body: {
+      name: string;
+      localPath: string;
+      direction?: 'two-way' | 'backup-only' | 'download-only';
+      createInCloud?: boolean;
+      // cloud target
+      providerId?: string;
+      // device target — remoteFolderKind picks which of the peer's folder namespaces remoteFolderId is
+      // in: one of its cloud-backed FolderConfig folders, or one of its real local folders (see
+      // localFolders.ts) with no cloud account in the loop at all.
+      deviceId?: string;
+      remoteFolderId?: string;
+      remoteFolderKind?: 'folder' | 'local-folder';
+    };
   }>('/sync/pairs', async (req, reply) => {
-    const { name, localPath, providerId, direction, createInCloud } = req.body;
+    const { name, localPath, providerId, direction, createInCloud, deviceId, remoteFolderId, remoteFolderKind } = req.body;
     if (!name?.trim()) return reply.code(400).send({ error: 'missing name' });
     if (!localPath?.trim()) return reply.code(400).send({ error: 'missing local folder' });
     if (!fs.existsSync(localPath) || !fs.statSync(localPath).isDirectory()) {
       return reply.code(400).send({ error: 'local folder does not exist' });
     }
+
+    if (deviceId) {
+      if (!remoteFolderId) return reply.code(400).send({ error: 'missing remote folder on the paired device' });
+      const pair = createSyncPair({
+        id: crypto.randomUUID(),
+        name: name.trim(),
+        localPath,
+        targetKind: 'device',
+        deviceId,
+        deviceFolderId: remoteFolderId,
+        deviceFolderKind: remoteFolderKind ?? 'folder',
+        remotePath: '', // DeviceSyncTarget addresses files by name within the peer's folder id — no prefix concept
+        direction: direction ?? 'two-way',
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        sourceDeviceName: getDeviceIdentity().name,
+      });
+      startSyncPair(pair, backends);
+      return { pair };
+    }
+
+    if (!providerId) return reply.code(400).send({ error: 'missing providerId or deviceId' });
     const backend = backends.get(providerId);
     if (!backend) return reply.code(409).send({ error: 'provider not configured' });
 
@@ -108,11 +143,26 @@ export function registerSyncPairRoutes(app: FastifyInstance, backends: Map<strin
   app.post<{ Params: { id: string } }>('/sync/pairs/:id/resume', async (req, reply) => {
     const pair = getSyncPair(req.params.id);
     if (!pair) return reply.code(404).send({ error: 'sync pair not found' });
-    const backend = backends.get(pair.providerId ?? '');
-    if (!backend) return reply.code(409).send({ error: 'provider not reachable' });
+    const backend = pair.targetKind === 'cloud' ? backends.get(pair.providerId ?? '') : undefined;
+    if (pair.targetKind === 'cloud' && !backend) return reply.code(409).send({ error: 'provider not reachable' });
     // resumeAutoSyncForFolder just restarts the reconciliation interval — the live push watcher (started
-    // by startSyncPair originally) was never stopped by pause, only the interval was, so no need to touch it.
-    resumeAutoSyncForFolder({ id: pair.id, name: pair.name, localPath: pair.localPath, provider: pair.providerId ?? '', remotePrefix: pair.remotePath, autoSync: true }, backend);
+    // by startSyncPair originally) was never stopped by pause, only the interval was, so no need to touch
+    // it. resolveSyncTarget ignores `backend` entirely for a device-target pair, so undefined is fine there.
+    resumeAutoSyncForFolder(
+      {
+        id: pair.id,
+        name: pair.name,
+        localPath: pair.localPath,
+        provider: pair.providerId ?? '',
+        remotePrefix: pair.remotePath,
+        autoSync: true,
+        syncTargetKind: pair.targetKind,
+        syncDeviceId: pair.deviceId,
+        syncDeviceFolderId: pair.deviceFolderId,
+        syncDeviceFolderKind: pair.deviceFolderKind,
+      },
+      backend,
+    );
     return { ok: true };
   });
 

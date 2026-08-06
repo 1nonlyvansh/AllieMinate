@@ -67,7 +67,9 @@ export interface NearbyPeerInfo {
 export interface RemoteFolder {
   id: string;
   name: string;
-  provider: string;
+  // absent for a local-folder category (Desktop/Downloads/Received/...) — only cloud-backed categories
+  // (from /devices/:id/folders, as opposed to /devices/:id/local-folders) have a real provider.
+  provider?: string;
 }
 
 export interface ClipboardFileItem {

@@ -1,12 +1,13 @@
 {
   "name": "@alliminate/desktop",
+  "productName": "AllieMinate",
   "private": true,
   "version": "0.1.0",
   "main": "dist/main/index.js",
   "scripts": {
     "dev": "tsc -p tsconfig.json --watch",
     "build": "tsc -p tsconfig.json",
-    "build:renderer": "esbuild src/renderer/index.tsx --bundle --outfile=src/renderer/bundle.js --loader:.tsx=tsx --jsx=automatic",
+    "build:renderer": "esbuild src/renderer/index.tsx --bundle --outfile=src/renderer/bundle.js --loader:.tsx=tsx --loader:.png=dataurl --jsx=automatic && esbuild src/renderer/trayPanelIndex.tsx --bundle --outfile=src/renderer/trayPanel-bundle.js --loader:.tsx=tsx --loader:.png=dataurl --jsx=automatic",
     "start": "electron ."
   },
   "dependencies": {
