@@ -22,6 +22,7 @@
 [![React](https://img.shields.io/badge/React-18-00e5ff?style=flat-square&logo=react&logoColor=00e5ff&labelColor=050d1a)](https://react.dev)
 [![Fastify](https://img.shields.io/badge/Fastify-Backend-00e5ff?style=flat-square&logo=fastify&logoColor=00e5ff&labelColor=050d1a)](https://fastify.dev)
 [![Android](https://img.shields.io/badge/Android-Companion%20App-00e5ff?style=flat-square&logo=android&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/releases/latest)
+[![macOS DMG](https://img.shields.io/badge/macOS-DMG%20Installer-00e5ff?style=flat-square&logo=apple&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%C2%B7%20Windows%20soon-0d2a3a?style=flat-square&logo=apple&logoColor=c8e8f0&labelColor=050d1a)](.)
 [![Status](https://img.shields.io/badge/Status-Active%20Dev-1db954?style=flat-square&labelColor=050d1a)](.)
 
@@ -75,7 +76,13 @@ It then pairs with your **Android phone** directly over your local network — n
 - Every paired-device request signed and token-authenticated
 
 **🖥️ Desktop Experience**
-- Menu bar tray — live recent files, drag-out, quick actions without opening the full window
+- **Menu Bar Icon** — lives in your Mac's menu bar the whole time AllieMinate is running, no need to keep the full window open:
+  - Click it for a floating panel of your most recent cloud and device files, thumbnails included
+  - Pick which cloud account (or "Combined") the panel shows, right from a dropdown in the panel itself
+  - Filter to device backups only, or hide them, without leaving the panel
+  - Drag a file straight out of the panel into Finder, Mail, Slack, anywhere — like dragging from a real folder
+  - Click a file to reveal it in Finder, or a phone file to pull it down and open it, in one click
+  - A live progress bar for anything currently uploading or downloading
 - Global search across every cloud and every paired device at once
 - Full-featured Trash, Transfer History, and per-account storage breakdown
 
@@ -159,6 +166,17 @@ The backend is the single source of truth. The desktop app is a window onto it; 
 ---
 
 ## Running the Mac App
+
+The fastest way to get AllieMinate on your Mac is the `.dmg` installer — no Node, no build step, just drag it into Applications like any other Mac app:
+
+[![Download DMG](https://img.shields.io/badge/Download-AllieMinate.dmg-00e5ff?style=for-the-badge&logo=apple&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/releases/latest)
+
+1. Download and open the `.dmg`.
+2. Drag **AllieMinate** onto the **Applications** shortcut next to it.
+3. Open AllieMinate from Applications or Launchpad. Since it isn't notarized with a paid Apple Developer certificate, the first launch will be blocked by Gatekeeper — right-click the app → **Open** (or **System Settings → Privacy & Security → Open Anyway**) to get past that one-time warning.
+4. Add your cloud accounts from **Settings**.
+
+Prefer building from source instead (e.g. to make changes)? Keep reading below.
 
 ### Requirements
 - macOS
