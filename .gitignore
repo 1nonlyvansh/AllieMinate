@@ -47,6 +47,7 @@ apps/desktop/src/renderer/trayPanel-bundle.js
 
 # Packaged app build output
 apps/desktop/build/AllieMinate.app/
+apps/desktop/build/AllieMinate.dmg
 apps/desktop/build/ql-out/
 apps/desktop/build/AllieMinate.iconset/
 
