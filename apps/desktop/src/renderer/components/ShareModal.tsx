@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import type { PairedDeviceInfo, RemoteFolder } from '../lib/types';
+import React, { useState } from 'react';
+import type { PairedDeviceInfo } from '../lib/types';
 import { Modal } from './Modal';
 import { FilePreviewStrip } from './FilePreviewStrip';
 
@@ -21,33 +21,18 @@ export function ShareModal({
   onClose: () => void;
 }) {
   const [files, setFiles] = useState<File[]>(initialFiles);
-  const [folders, setFolders] = useState<RemoteFolder[]>([]);
-  const [destFolderId, setDestFolderId] = useState('');
-  const [status, setStatus] = useState<'loading' | 'ready' | 'sending' | 'done' | 'error'>('loading');
-  const [error, setError] = useState<string | null>(null);
+  // "Send" always lands straight in the peer's own inbox (Received on Mac/PC) — same as Android's
+  // phone-to-Mac share — so there's no destination to pick, matching the "drag a file onto a device to
+  // send it straight across" promise instead of forcing a cloud-folder choice first.
+  const [status, setStatus] = useState<'ready' | 'sending' | 'done'>('ready');
   const [progress, setProgress] = useState<FileStatus[]>([]);
-
-  useEffect(() => {
-    fetch(`${API_BASE}/devices/${device.id}/folders`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.error) throw new Error(data.error);
-        setFolders(data.folders ?? []);
-        setDestFolderId(data.folders?.[0]?.id ?? '');
-        setStatus('ready');
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : String(err));
-        setStatus('error');
-      });
-  }, [device.id]);
 
   function removeFile(index: number) {
     setFiles((f) => f.filter((_, i) => i !== index));
   }
 
   async function send() {
-    if (!destFolderId || files.length === 0) return;
+    if (files.length === 0) return;
     setStatus('sending');
     setProgress(files.map((f) => ({ name: f.name, state: 'pending' })));
 
@@ -56,7 +41,7 @@ export function ShareModal({
       try {
         const buf = await file.arrayBuffer();
         const res = await fetch(
-          `${API_BASE}/devices/${device.id}/share?destFolderId=${destFolderId}&name=${encodeURIComponent(file.name)}`,
+          `${API_BASE}/devices/${device.id}/share?name=${encodeURIComponent(file.name)}`,
           { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: buf },
         );
         const data = await res.json();
@@ -80,7 +65,7 @@ export function ShareModal({
         ) : (
           <>
             <button className="btn" onClick={onClose}>Cancel</button>
-            <button className="btn primary" disabled={status !== 'ready' || !destFolderId || files.length === 0} onClick={send}>
+            <button className="btn primary" disabled={status !== 'ready' || files.length === 0} onClick={send}>
               {status === 'sending' ? 'Sending…' : `Send${files.length > 1 ? ` (${files.length})` : ''}`}
             </button>
           </>
@@ -90,9 +75,6 @@ export function ShareModal({
       {status !== 'done' && status !== 'sending' && (
         <FilePreviewStrip files={files} onRemove={removeFile} />
       )}
-
-      {status === 'loading' && <div className="empty-state">Loading {device.name}'s folders…</div>}
-      {status === 'error' && <div style={{ color: 'var(--offline)', fontSize: 12.5 }}>{error}</div>}
 
       {(status === 'sending' || status === 'done') && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
@@ -109,17 +91,6 @@ export function ShareModal({
 
       {status === 'ready' && files.length === 0 && (
         <div className="empty-state">No files left to send</div>
-      )}
-
-      {status === 'ready' && files.length > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
-          <label>Save to</label>
-          <select className="select-field" value={destFolderId} onChange={(e) => setDestFolderId(e.target.value)}>
-            {folders.map((f) => (
-              <option key={f.id} value={f.id}>{f.name} ({f.provider})</option>
-            ))}
-          </select>
-        </div>
       )}
     </Modal>
   );

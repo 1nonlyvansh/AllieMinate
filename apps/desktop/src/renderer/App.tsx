@@ -182,6 +182,19 @@ export function App(): JSX.Element {
             setIncomingUnlockRequest(payload);
             return;
           }
+          // a paired device just pushed a file straight into this Mac/PC's own inbox (device-to-device
+          // Share, from either another AllieMinate desktop or a phone's share-sheet) — a real OS
+          // notification for this, not just an Activity feed line, since the whole point is the user
+          // finding out even when the app window isn't focused.
+          if (event.type === 'file-synced' && event.folderId === 'device-inbox') {
+            const payload = event.payload as { key?: string; from?: string } | undefined;
+            const fileName = payload?.key ?? 'A file';
+            try {
+              new Notification('File Received', { body: payload?.from ? `"${fileName}" from ${payload.from}` : `"${fileName}"` });
+            } catch {
+              // Notification unsupported/blocked — the Activity feed entry below still shows it.
+            }
+          }
           const key = typeof event.payload === 'object' && event.payload && 'key' in event.payload
             ? String((event.payload as { key: unknown }).key)
             : event.folderId;

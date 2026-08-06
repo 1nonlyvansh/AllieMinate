@@ -856,20 +856,28 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
     },
   );
 
-  // pushes a file straight to a paired device's folder — used for device-to-device Share.
-  app.post<{ Params: { id: string }; Querystring: { destFolderId: string; name: string } }>(
+  // pushes a file straight to a paired device — used for device-to-device Share. Lands in the peer's own
+  // inbox (/inbox/upload — same route Android's phone-to-Mac "Send to Connected Devices" already uses),
+  // NOT a cloud-backed FolderConfig folder: this used to hit /folders/:destFolderId/upload, which required
+  // the peer to already have a matching cloud folder configured and silently left the Send button
+  // permanently disabled when it didn't (no destFolderId ever resolved) — and even when a folder DID
+  // resolve, that route has no relation to "drag a file onto a paired device," it's for cloud uploads.
+  // /inbox/upload also already logs the transfer and fires the file-synced event on the RECEIVING side,
+  // which is what was missing before (sender showed "sent", receiver showed nothing — that write was going
+  // to a stray cloud-folder path with no logging, not the receiver's actual Received folder).
+  app.post<{ Params: { id: string }; Querystring: { name: string } }>(
     '/devices/:id/share',
     async (req, reply) => {
       const peer = findPeer(req.params.id);
       if (!peer) return reply.code(404).send({ error: 'device not paired' });
 
-      const { destFolderId, name } = req.query;
-      if (!destFolderId || !name) return reply.code(400).send({ error: 'missing destFolderId or name' });
+      const { name } = req.query;
+      if (!name) return reply.code(400).send({ error: 'missing name' });
 
       try {
         const from = getDeviceIdentity().name;
         const res = await fetch(
-          `http://${peer.host}/folders/${destFolderId}/upload?name=${encodeURIComponent(name)}&from=${encodeURIComponent(from)}`,
+          `http://${peer.host}/inbox/upload?name=${encodeURIComponent(name)}&from=${encodeURIComponent(from)}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/octet-stream', Authorization: `Bearer ${peer.token}` },
@@ -884,7 +892,7 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
           fileName: name,
           direction: 'sent',
           size: (req.body as Buffer).length,
-          path: `${destFolderId}/${name}`,
+          path: `Sent to ${peer.name}`,
         });
         return result;
       } catch (err) {

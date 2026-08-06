@@ -84,20 +84,16 @@ async function uploadDroppedFiles(filePaths: string[], folderId: string, onProgr
   }
 }
 
+// lands straight in the peer's own inbox (Received on Mac/PC) — same /devices/:id/share route ShareModal
+// uses, no cloud-folder destination needed (see devices.ts's own comment on that route for why it used
+// to require one and why that was wrong for a straight device-to-device drop).
 async function shareDroppedFiles(filePaths: string[], deviceId: string, onProgress: ProgressCallback): Promise<void> {
-  const data = await fetchJson<{ folders: { id: string }[] }>(`${API_BASE}/devices/${deviceId}/folders`);
-  const destFolderId = data?.folders?.[0]?.id;
-  if (!destFolderId) {
-    filePaths.forEach((_, i) => onProgress(i, 'error'));
-    return;
-  }
-
   for (let i = 0; i < filePaths.length; i++) {
     onProgress(i, 'uploading');
     try {
       const bytes = await fs.readFile(filePaths[i]);
       const name = path.basename(filePaths[i]);
-      const res = await fetch(`${API_BASE}/devices/${deviceId}/share?destFolderId=${destFolderId}&name=${encodeURIComponent(name)}`, {
+      const res = await fetch(`${API_BASE}/devices/${deviceId}/share?name=${encodeURIComponent(name)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/octet-stream' },
         body: bytes,
