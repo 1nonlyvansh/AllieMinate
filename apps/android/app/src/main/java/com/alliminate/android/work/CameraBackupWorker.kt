@@ -23,8 +23,9 @@ private const val BATCH_LIMIT = 20 // cap per run so one wake doesn't try to pus
 class CameraBackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val host = Prefs.masterHost.value
-        val token = Prefs.masterToken.value
+        val master = Prefs.masterById(Prefs.backupMasterId.value)
+        val host = master?.host
+        val token = master?.token
         val providerId = Prefs.backupFolderId.value
         if (!Prefs.backupEnabled.value || host == null || token == null || providerId == null) return Result.success()
 

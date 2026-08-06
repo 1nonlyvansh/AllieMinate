@@ -250,8 +250,11 @@ private fun AudioAccessRow(context: Context) = MediaAccessRow(context, Icons.Fil
 
 @Composable
 private fun CameraBackupSection(context: Context) {
-    val host = Prefs.masterHost.value
-    val token = Prefs.masterToken.value
+    // backs up to whichever PC was paired first — with more than one paired, the others' clouds aren't
+    // reachable as a backup destination yet (no cross-PC cloud aggregation UI exists).
+    val master = Prefs.primaryMaster
+    val host = master?.host
+    val token = master?.token
     var accounts by remember { mutableStateOf<List<AccountInfo>?>(null) }
     var showPicker by remember { mutableStateOf(false) }
 
@@ -301,7 +304,7 @@ private fun CameraBackupSection(context: Context) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    Prefs.setBackupFolder(account.accountId, account.label)
+                                    Prefs.setBackupFolder(master?.id, account.accountId, account.label)
                                     showPicker = false
                                 }
                                 .padding(vertical = 12.dp),

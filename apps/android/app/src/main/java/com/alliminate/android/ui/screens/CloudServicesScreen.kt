@@ -86,8 +86,10 @@ fun baseProviderOf(id: String): String = id.substringBefore(':')
 
 @Composable
 fun CloudServicesScreen(onOpenDrawer: () -> Unit) {
-    val host = Prefs.masterHost.value
-    val token = Prefs.masterToken.value
+    // browses whichever PC was paired first — with more than one paired, the others' clouds aren't
+    // reachable from this screen yet (no cross-PC cloud aggregation UI exists).
+    val host = Prefs.primaryMaster?.host
+    val token = Prefs.primaryMaster?.token
 
     var accounts by remember { mutableStateOf<List<AccountInfo>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }

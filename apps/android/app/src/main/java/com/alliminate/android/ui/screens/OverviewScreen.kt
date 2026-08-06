@@ -59,9 +59,10 @@ private const val OVERVIEW_PING_INTERVAL_MS = 6000L
 
 @Composable
 fun OverviewScreen(onOpenDrawer: () -> Unit, onNavigate: (String) -> Unit = {}) {
-    val host = Prefs.masterHost.value
-    val token = Prefs.masterToken.value
-    val name = Prefs.masterName.value
+    val master = Prefs.primaryMaster
+    val host = master?.host
+    val token = master?.token
+    val name = master?.name
     val context = LocalContext.current
 
     var masterOnline by remember { mutableStateOf<Boolean?>(null) }

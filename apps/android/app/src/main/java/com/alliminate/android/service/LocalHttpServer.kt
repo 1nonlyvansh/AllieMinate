@@ -121,10 +121,10 @@ class LocalHttpServer(private val context: Context) : NanoHTTPD(LOCAL_SERVER_POR
         // /nearby/request* is reachable by ANY sender on the LAN, paired or not — that's the whole point
         // of Nearby Share (a device discovered via UDP broadcast has no pre-shared token). Consent lives in
         // the accept/decline notification itself, not in a Bearer token check.
+        var authenticatedMaster: com.alliminate.android.data.PairedMaster? = null
         if (!uri.startsWith("/nearby/request")) {
-            val token = Prefs.masterToken.value
-            val auth = session.headers["authorization"]
-            if (token == null || auth != "Bearer $token") return unauthorized()
+            val auth = session.headers["authorization"]?.removePrefix("Bearer ")
+            authenticatedMaster = Prefs.pairedMasters.firstOrNull { it.token == auth } ?: return unauthorized()
         }
 
         return when {
@@ -142,10 +142,10 @@ class LocalHttpServer(private val context: Context) : NanoHTTPD(LOCAL_SERVER_POR
             session.method == Method.POST && uri == "/nearby/request" -> handleNearbyRequest(session)
             session.method == Method.GET && uri.startsWith("/nearby/request/") && uri.endsWith("/status") -> handleNearbyStatus(uri)
             session.method == Method.POST && uri.startsWith("/nearby/request/") && uri.endsWith("/upload") -> handleNearbyUpload(session, uri)
-            session.method == Method.POST && uri == "/continuity" -> handleContinuity(session)
+            session.method == Method.POST && uri == "/continuity" -> handleContinuity(session, authenticatedMaster!!)
             session.method == Method.POST && uri == "/unlock/request" -> handleUnlockRequest(session)
             session.method == Method.GET && uri.startsWith("/unlock/request/") && uri.endsWith("/status") -> handleUnlockStatus(uri)
-            session.method == Method.POST && uri == "/unpair" -> handleUnpair()
+            session.method == Method.POST && uri == "/unpair" -> handleUnpair(authenticatedMaster!!)
             else -> notFound()
         }
     }
@@ -199,7 +199,7 @@ class LocalHttpServer(private val context: Context) : NanoHTTPD(LOCAL_SERVER_POR
     // Continuity Handoff — the paired Master Device just opened a file and pushed a "now viewing X"
     // presence signal here (see backend's continuity.ts). This route is Bearer-authenticated like every
     // other paired route (unlike /nearby/request, there's no unpaired-consent story to work around here).
-    private fun handleContinuity(session: IHTTPSession): Response {
+    private fun handleContinuity(session: IHTTPSession, master: com.alliminate.android.data.PairedMaster): Response {
         val bytes = readRequestBody(session) ?: return badRequest("missing content-length")
         val body = runCatching { JSONObject(String(bytes, Charsets.UTF_8)) }.getOrNull() ?: return badRequest("invalid body")
         val fromName = body.optString("fromName").takeIf { it.isNotBlank() } ?: return badRequest("missing fromName")
@@ -207,7 +207,7 @@ class LocalHttpServer(private val context: Context) : NanoHTTPD(LOCAL_SERVER_POR
         val providerId = body.optString("providerId").takeIf { it.isNotBlank() } ?: return badRequest("missing providerId")
         val key = body.optString("key").takeIf { it.isNotBlank() } ?: return badRequest("missing key")
         val mimeType = body.optString("mimeType").takeIf { it.isNotBlank() }
-        TransferNotifications.showContinuity(context, fromName, fileName, providerId, key, mimeType)
+        TransferNotifications.showContinuity(context, fromName, fileName, providerId, key, mimeType, master.id)
         return json(JSONObject().apply { put("ok", true) })
     }
 
@@ -234,13 +234,13 @@ class LocalHttpServer(private val context: Context) : NanoHTTPD(LOCAL_SERVER_POR
     // The Master just removed us from its own paired-devices list (devices.ts's DELETE /devices/:id) and
     // is telling us so — without this, unpairing from the Mac side only ever cleared ITS OWN record; this
     // phone kept its token and just sat there showing the Mac as "Offline" forever instead of actually
-    // unpaired. The Bearer token check in serve() above already proves this call came from the Master we
-    // currently trust (the token has to match Prefs.masterToken.value bit-for-bit), so no extra body/id
-    // check is needed here — just drop the pairing. The foreground service is left running; every feature
-    // that depends on being paired already gates on Prefs.isPaired, so an unpaired-but-still-running
-    // service is harmless (same as right after a fresh install, before ever pairing).
-    private fun handleUnpair(): Response {
-        Prefs.clearPairing()
+    // unpaired. The Bearer token check in serve() above already proves this call came from a master we
+    // currently trust, and now identifies WHICH one — with up to 5 paired, only that one entry is dropped,
+    // not every pairing this phone has. The foreground service is left running; every feature that depends
+    // on being paired already gates on Prefs.isPaired, so an unpaired-but-still-running service is harmless
+    // (same as right after a fresh install, before ever pairing).
+    private fun handleUnpair(master: com.alliminate.android.data.PairedMaster): Response {
+        Prefs.clearPairing(master.id)
         return json(JSONObject().apply { put("ok", true) })
     }
 

@@ -48,23 +48,30 @@ class DeviceStatusWidgetProvider : AppWidgetProvider() {
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val host = Prefs.masterHost.value
-        val token = Prefs.masterToken.value
-        val name = Prefs.masterName.value
+        val masters = Prefs.pairedMasters.toList()
 
         val views = RemoteViews(context.packageName, R.layout.widget_device_status)
         views.setOnClickPendingIntent(R.id.widget_title, pendingIntent)
 
-        if (host == null || token == null) {
+        if (masters.isEmpty()) {
             views.setTextViewText(R.id.widget_status_text, "Not paired — tap to open")
             views.setInt(R.id.widget_status_dot, "setBackgroundColor", COLOR_UNPAIRED)
             appWidgetManager.updateAppWidget(widgetId, views)
             return
         }
 
-        val online = runCatching { MasterApi.ping(host, token) }.getOrDefault(false)
-        views.setTextViewText(R.id.widget_status_text, "$name — ${if (online) "Online" else "Offline"}")
-        views.setInt(R.id.widget_status_dot, "setBackgroundColor", if (online) COLOR_ONLINE else COLOR_OFFLINE)
+        if (masters.size == 1) {
+            val master = masters[0]
+            val online = runCatching { MasterApi.ping(master.host, master.token) }.getOrDefault(false)
+            views.setTextViewText(R.id.widget_status_text, "${master.name} — ${if (online) "Online" else "Offline"}")
+            views.setInt(R.id.widget_status_dot, "setBackgroundColor", if (online) COLOR_ONLINE else COLOR_OFFLINE)
+            appWidgetManager.updateAppWidget(widgetId, views)
+            return
+        }
+
+        val onlineCount = masters.count { runCatching { MasterApi.ping(it.host, it.token) }.getOrDefault(false) }
+        views.setTextViewText(R.id.widget_status_text, "$onlineCount of ${masters.size} PCs online")
+        views.setInt(R.id.widget_status_dot, "setBackgroundColor", if (onlineCount > 0) COLOR_ONLINE else COLOR_OFFLINE)
         appWidgetManager.updateAppWidget(widgetId, views)
     }
 }

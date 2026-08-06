@@ -38,7 +38,7 @@ private const val MAX_CONCURRENT_UPLOADS = 3
 private val IGNORED_NAMES = setOf(".DS_Store", ".git", "node_modules", ".localized")
 private fun isIgnored(name: String) = name.startsWith(".") || name in IGNORED_NAMES || name.endsWith(".tmp")
 
-private data class PendingUpload(val pair: SyncPair, val file: File, val record: SyncFileRecord?)
+private data class PendingUpload(val pair: SyncPair, val file: File, val record: SyncFileRecord?, val host: String, val token: String)
 
 /** Sync Engine (Android) Phase 1/2 — one-way push only (phone → chosen cloud folder), top-level files in
  * the chosen folder only (no recursive subfolder walk yet — Phase 3 territory, matching the desktop
@@ -53,9 +53,7 @@ private data class PendingUpload(val pair: SyncPair, val file: File, val record:
 class SyncPushWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val host = Prefs.masterHost.value
-        val token = Prefs.masterToken.value
-        if (host == null || token == null) return Result.success() // not paired — nothing to push to
+        if (!Prefs.isPaired) return Result.success() // not paired — nothing to push to
 
         val activePairs = SyncPairStore.list().filter { it.status == "active" }
         // per-pair mutable state, shared across possibly-concurrent uploads FROM THE SAME PAIR — a plain
@@ -65,6 +63,14 @@ class SyncPushWorker(context: Context, params: WorkerParameters) : CoroutineWork
 
         val pending = mutableListOf<PendingUpload>()
         for (pair in activePairs) {
+            // route to the specific PC this pair was created against — falls back to the first paired PC
+            // for pairs created before multi-pairing existed, which is the only master they could have
+            // possibly meant.
+            val master = Prefs.masterById(pair.masterId) ?: Prefs.primaryMaster
+            if (master == null) {
+                SyncActivityStore.record(pair.id, "\"${pair.name}\" — its paired PC is no longer paired", isError = true)
+                continue
+            }
             val dir = File(pair.localPath)
             if (!dir.isDirectory) {
                 SyncActivityStore.record(pair.id, "\"${pair.name}\" — folder no longer exists on this phone", isError = true)
@@ -75,7 +81,7 @@ class SyncPushWorker(context: Context, params: WorkerParameters) : CoroutineWork
             for (file in files) {
                 val record = state[file.name]
                 val unchanged = record != null && record.size == file.length() && record.modifiedAt == file.lastModified()
-                if (!unchanged) pending.add(PendingUpload(pair, file, record))
+                if (!unchanged) pending.add(PendingUpload(pair, file, record, master.host, master.token))
             }
         }
 
@@ -93,7 +99,7 @@ class SyncPushWorker(context: Context, params: WorkerParameters) : CoroutineWork
                             val state = stateByPair.getValue(item.pair.id)
                             val result = runCatching {
                                 item.file.inputStream().use { input ->
-                                    MasterApi.uploadStreamToProvider(host, token, item.pair.providerId, item.file.name, input, folderId = item.pair.remoteFolderId)
+                                    MasterApi.uploadStreamToProvider(item.host, item.token, item.pair.providerId, item.file.name, input, folderId = item.pair.remoteFolderId)
                                 }
                             }.getOrElse { ApiResult.Err(it.message ?: "upload failed") }
 

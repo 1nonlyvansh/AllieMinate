@@ -121,7 +121,8 @@ class MainActivity : FragmentActivity() {
         val providerId = intent.getStringExtra(TransferNotifications.EXTRA_PROVIDER_ID) ?: return
         val key = intent.getStringExtra(TransferNotifications.EXTRA_KEY) ?: return
         val mimeType = intent.getStringExtra(TransferNotifications.EXTRA_MIME_TYPE)
-        ContinuityHolder.pending.value = ContinuityPayload(fromName, fileName, providerId, key, mimeType)
+        val masterId = intent.getStringExtra(TransferNotifications.EXTRA_MASTER_ID) ?: return
+        ContinuityHolder.pending.value = ContinuityPayload(fromName, fileName, providerId, key, mimeType, masterId)
     }
 
     private fun handlePairDeepLink(intent: Intent?) {
@@ -261,8 +262,9 @@ private fun AllieMinateContent() {
     LaunchedEffect(ContinuityHolder.pending.value) {
         val payload = ContinuityHolder.pending.value ?: return@LaunchedEffect
         ContinuityHolder.pending.value = null
-        val host = Prefs.masterHost.value
-        val token = Prefs.masterToken.value
+        val master = Prefs.masterById(payload.masterId)
+        val host = master?.host
+        val token = master?.token
         if (host == null || token == null) {
             Toast.makeText(context, "Not paired with a Master Device", Toast.LENGTH_SHORT).show()
             return@LaunchedEffect

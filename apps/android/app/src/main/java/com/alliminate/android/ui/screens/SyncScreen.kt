@@ -192,8 +192,9 @@ private fun SyncPairCard(pair: SyncPair, onChanged: () -> Unit) {
                     // the cloud folder forever with nothing left on the phone to say which files were its.
                     // Read the synced-file list (and cascade-trash them on the Master) BEFORE clearing that
                     // state — SyncPairStore.remove() wipes SyncFileStateStore for this pair as its last step.
-                    val host = Prefs.masterHost.value
-                    val token = Prefs.masterToken.value
+                    val master = Prefs.masterById(pair.masterId) ?: Prefs.primaryMaster
+                    val host = master?.host
+                    val token = master?.token
                     val syncedNames = SyncFileStateStore.load(pair.id)
                         .filterValues { it.status == "synced" }
                         .keys
@@ -298,8 +299,10 @@ private fun LocalFolderPicker(onCancel: () -> Unit, onPicked: (String) -> Unit) 
 
 @Composable
 private fun ProviderPicker(onCancel: () -> Unit, onPicked: (String, String) -> Unit) {
-    val host = Prefs.masterHost.value
-    val token = Prefs.masterToken.value
+    // new Sync Pairs are created against whichever PC was paired first — with more than one paired, the
+    // others' clouds aren't reachable from this picker yet (no cross-PC cloud aggregation UI exists).
+    val host = Prefs.primaryMaster?.host
+    val token = Prefs.primaryMaster?.token
     var accounts by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -337,8 +340,8 @@ private fun ProviderPicker(onCancel: () -> Unit, onPicked: (String, String) -> U
 
 @Composable
 private fun RemoteFolderPicker(providerId: String, providerLabel: String, onCancel: () -> Unit, onPicked: (String?, String) -> Unit) {
-    val host = Prefs.masterHost.value
-    val token = Prefs.masterToken.value
+    val host = Prefs.primaryMaster?.host
+    val token = Prefs.primaryMaster?.token
     var crumbs by remember { mutableStateOf(listOf(TreeFolderNode(id = "", name = providerLabel))) }
     var folders by remember { mutableStateOf<List<TreeFolderNode>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -467,6 +470,7 @@ private fun ConfirmSyncPair(
                         remoteFolderName = remoteFolderName,
                         status = "active",
                         createdAt = fmt.format(Date()),
+                        masterId = Prefs.primaryMaster?.id,
                     ),
                 )
                 onCreated()

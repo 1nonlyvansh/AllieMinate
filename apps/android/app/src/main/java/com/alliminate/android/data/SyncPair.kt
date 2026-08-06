@@ -19,6 +19,10 @@ data class SyncPair(
     val remoteFolderName: String,
     val status: String, // "active" | "paused"
     val createdAt: String,
+    // which paired PC this pair pushes to — nullable only for pairs created before multi-pairing existed;
+    // SyncPushWorker falls back to Prefs.primaryMaster for those, which was the only master they could
+    // possibly have been created against.
+    val masterId: String?,
 )
 
 /** One tracked file's last-known-pushed state, keyed by filename within the pair's local folder — enough
@@ -66,6 +70,7 @@ object SyncPairStore {
                 remoteFolderName = o.optString("remoteFolderName"),
                 status = o.optString("status").ifBlank { "active" },
                 createdAt = o.getString("createdAt"),
+                masterId = o.optString("masterId").ifBlank { null },
             )
         }
     }
@@ -99,6 +104,7 @@ object SyncPairStore {
                     put("remoteFolderName", p.remoteFolderName)
                     put("status", p.status)
                     put("createdAt", p.createdAt)
+                    put("masterId", p.masterId ?: "")
                 },
             )
         }

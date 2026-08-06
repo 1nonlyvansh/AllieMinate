@@ -56,9 +56,13 @@ fun PairDeviceDialog(onDismiss: () -> Unit, onPaired: () -> Unit) {
             val (host, code) = parsed
             when (val pairResult = MasterApi.pairVerify(host, code)) {
                 is ApiResult.Ok -> {
-                    Prefs.savePairing(host, pairResult.value.token, pairResult.value.name, pairResult.value.platform, pairResult.value.id)
+                    val accepted = Prefs.savePairing(host, pairResult.value.token, pairResult.value.name, pairResult.value.platform, pairResult.value.id)
                     busy = false
-                    onPaired()
+                    if (accepted) {
+                        onPaired()
+                    } else {
+                        error = "Already paired with ${Prefs.MAX_PAIRED_MASTERS} PCs — unpair one first"
+                    }
                 }
                 is ApiResult.Err -> {
                     busy = false

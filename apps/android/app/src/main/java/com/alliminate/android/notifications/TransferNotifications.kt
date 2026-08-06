@@ -31,6 +31,7 @@ object TransferNotifications {
     const val EXTRA_PROVIDER_ID = "continuity_provider_id"
     const val EXTRA_KEY = "continuity_key"
     const val EXTRA_MIME_TYPE = "continuity_mime_type"
+    const val EXTRA_MASTER_ID = "continuity_master_id"
 
     private fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -239,7 +240,7 @@ object TransferNotifications {
     /** "now viewing X" presence signal from a paired Master Device — tapping downloads the same file from
      * that device (via MasterApi, the same cloud-provider route Cloud Services already uses) and opens it
      * directly. No accept/decline step like Nearby Share: this is already a trusted paired peer. */
-    fun showContinuity(context: Context, fromName: String, fileName: String, providerId: String, key: String, mimeType: String?) {
+    fun showContinuity(context: Context, fromName: String, fileName: String, providerId: String, key: String, mimeType: String?, masterId: String) {
         if (!hasPermission(context)) return
         ensureChannel(context)
         val openIntent = Intent(context, com.alliminate.android.MainActivity::class.java).apply {
@@ -249,6 +250,7 @@ object TransferNotifications {
             putExtra(EXTRA_PROVIDER_ID, providerId)
             putExtra(EXTRA_KEY, key)
             putExtra(EXTRA_MIME_TYPE, mimeType)
+            putExtra(EXTRA_MASTER_ID, masterId)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val pending = PendingIntent.getActivity(

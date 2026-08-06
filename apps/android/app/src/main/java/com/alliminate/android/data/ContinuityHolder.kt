@@ -8,6 +8,9 @@ data class ContinuityPayload(
     val providerId: String,
     val key: String,
     val mimeType: String?,
+    // which paired master sent this — with more than one paired PC, fromName alone isn't enough to know
+    // whose host/token to download the file from.
+    val masterId: String,
 )
 
 /** Set by MainActivity when a "Continue on this phone?" notification is tapped; consumed once by a

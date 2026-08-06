@@ -128,8 +128,11 @@ private fun fileSizeOf(context: android.content.Context, uri: Uri): Long {
 fun ShareScreen(onOpenDrawer: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val host = Prefs.masterHost.value
-    val token = Prefs.masterToken.value
+    // "Save to Cloud" browses whichever PC was paired first — with more than one paired, the others'
+    // clouds aren't reachable from this picker yet (no cross-PC cloud aggregation UI exists). "Send to
+    // Device" below is NOT limited this way — it can target any paired PC.
+    val host = Prefs.primaryMaster?.host
+    val token = Prefs.primaryMaster?.token
 
     var pickedUri by remember { mutableStateOf<Uri?>(null) }
     var pickedName by remember { mutableStateOf<String?>(null) }
@@ -206,10 +209,9 @@ fun ShareScreen(onOpenDrawer: () -> Unit) {
         }
     }
 
-    fun sendToDevice() {
+    fun sendToDevice(master: com.alliminate.android.data.PairedMaster) {
         val uri = pickedUri ?: return
         val name = pickedName ?: return
-        if (host == null || token == null) return
         if (oversized(uri)) {
             result = "That file is over the 5GB transfer limit"
             return
@@ -223,8 +225,8 @@ fun ShareScreen(onOpenDrawer: () -> Unit) {
                 return@launch
             }
             val totalBytes = fileSizeOf(context, uri)
-            val destName = Prefs.masterName.value ?: "your Master Device"
-            when (val r = MasterApi.uploadStreamToInbox(host, token, name, input, progressReporter(context, name, totalBytes))) {
+            val destName = master.name
+            when (val r = MasterApi.uploadStreamToInbox(master.host, master.token, name, input, progressReporter(context, name, totalBytes))) {
                 is ApiResult.Ok -> {
                     uploading = false
                     result = "Sent \"$name\" to $destName"
@@ -298,19 +300,23 @@ fun ShareScreen(onOpenDrawer: () -> Unit) {
                 Text("Send to", style = MaterialTheme.typography.labelSmall, color = LocalAllieMinateColors.current.onSurfaceTertiary)
                 if (uploading) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator() }
+                } else if (Prefs.pairedMasters.isEmpty()) {
+                    EmptyStateCard(Icons.Filled.Devices, "Pair with a Mac or Windows PC in Devices to send files there.")
                 } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(LocalAllieMinateColors.current.surfaceStrong)
-                            .clickable { sendToDevice() }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    ) {
-                        Icon(Icons.Filled.Devices, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Text(Prefs.masterName.value ?: "Your Master Device", style = MaterialTheme.typography.bodyMedium)
+                    Prefs.pairedMasters.forEach { master ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(LocalAllieMinateColors.current.surfaceStrong)
+                                .clickable { sendToDevice(master) }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        ) {
+                            Icon(Icons.Filled.Devices, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Text(master.name, style = MaterialTheme.typography.bodyMedium)
+                        }
                     }
                 }
             } else {

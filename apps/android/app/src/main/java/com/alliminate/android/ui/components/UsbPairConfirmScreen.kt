@@ -62,12 +62,16 @@ fun UsbPairConfirmScreen(request: PairRequest, onHandled: () -> Unit) {
         scope.launch {
             when (val result = MasterApi.pairVerify(request.host, request.code)) {
                 is ApiResult.Ok -> {
-                    Prefs.savePairing(request.host, result.value.token, result.value.name, result.value.platform, result.value.id)
+                    val accepted = Prefs.savePairing(request.host, result.value.token, result.value.name, result.value.platform, result.value.id)
+                    busy = false
+                    if (!accepted) {
+                        error = "Already paired with ${Prefs.MAX_PAIRED_MASTERS} PCs — unpair one first"
+                        return@launch
+                    }
                     LocalServerService.start(context)
                     PairingStatus.isError.value = false
                     PairingStatus.message.value = "Paired with ${result.value.name}"
                     PendingRoute.route.value = Screen.Devices.route
-                    busy = false
                     onHandled()
                 }
                 is ApiResult.Err -> {

@@ -66,10 +66,10 @@ object NearbyBeacon {
         sendThread = null
     }
 
-    /** Hears the Mac's own periodic beacon (nearbyDiscovery.ts's setInterval broadcast — needs Nearby
-     * Share enabled on the MAC side, same as this phone's send loop needs it locally) and self-heals a
-     * stale `Prefs.masterHost` the moment the phone lands on a new network the Mac is also reachable on —
-     * mirrors the Mac backend's isOnline() fallback (devices.ts) that does the same thing in reverse.
+    /** Hears a paired PC's own periodic beacon (nearbyDiscovery.ts's setInterval broadcast — needs Nearby
+     * Share enabled on that PC, same as this phone's send loop needs it locally) and self-heals that one
+     * paired master's stale host the moment the phone lands on a new network it's also reachable on —
+     * mirrors the desktop backend's isOnline() fallback (devices.ts) that does the same thing in reverse.
      * Independent of the send loop: runs whenever paired, regardless of this phone's own discoverability. */
     fun startListening() {
         if (listening) return
@@ -100,13 +100,12 @@ object NearbyBeacon {
                         val data = JSONObject(String(packet.data, 0, packet.length))
                         if (data.optString("type") != "alliminate-nearby") return@runCatching
                         val beaconId = data.optString("id", "")
-                        val masterId = Prefs.masterId.value
-                        if (masterId == null || beaconId != masterId) return@runCatching
+                        val master = Prefs.masterById(beaconId) ?: return@runCatching
 
                         val port = data.optInt("port", 0)
                         if (port <= 0) return@runCatching
                         val newHost = "${packet.address.hostAddress}:$port"
-                        if (newHost != Prefs.masterHost.value) Prefs.updateMasterHost(newHost)
+                        if (newHost != master.host) Prefs.updateMasterHost(master.id, newHost)
                     }
                 }
             } finally {
