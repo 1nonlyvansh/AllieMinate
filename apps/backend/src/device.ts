@@ -48,6 +48,19 @@ const VIRTUAL_IFACE_SUBSTRINGS = [
   'tailscale', 'zerotier', 'wireguard', 'openvpn', 'bluetooth',
 ];
 
+// A name blocklist always lags new virtual-adapter software (found live: a "vgate0" interface handing
+// out a 172.30.x address that matched none of the names above). 172.16.0.0–172.31.255.255 is the private
+// range Docker's default bridge, WSL2, Hyper-V's default switch, and many VPN clients default to — a real
+// home/office LAN is overwhelmingly 192.168.x.x or 10.x.x.x, so this is a second, name-independent signal
+// for the exact same problem: an address in this specific slice is treated as likely-virtual even when
+// the adapter's name doesn't match anything in VIRTUAL_IFACE_SUBSTRINGS.
+function isLikelyVirtualByRange(address: string): boolean {
+  const m = address.match(/^172\.(\d{1,3})\./);
+  if (!m) return false;
+  const second = Number(m[1]);
+  return second >= 16 && second <= 31;
+}
+
 /** Best-guess LAN-reachable IPv4 address, for showing the user what to type on the other device. Real
  * adapters (en0/Wi-Fi, eth0, Ethernet, etc) win over virtual ones even when a virtual adapter happens
  * to sort first. */
@@ -56,10 +69,11 @@ export function getLanAddress(): string | null {
   let fallback: string | null = null;
   for (const [name, entries] of Object.entries(interfaces)) {
     const lower = name.toLowerCase();
-    const isVirtual = VIRTUAL_IFACE_SUBSTRINGS.some((s) => lower.includes(s));
+    const isVirtualByName = VIRTUAL_IFACE_SUBSTRINGS.some((s) => lower.includes(s));
     for (const entry of entries ?? []) {
       if (entry.family !== 'IPv4' || entry.internal) continue;
-      if (!isVirtual) return entry.address;
+      const isVirtual = isVirtualByName || isLikelyVirtualByRange(entry.address);
+      if (!isVirtual) return entry.address; // first confirmed-real address wins outright
       if (!fallback) fallback = entry.address;
     }
   }
