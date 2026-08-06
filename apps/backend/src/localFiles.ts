@@ -1,11 +1,23 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { builtinFolderPath } from './localFolders';
 
-// The folders a "This Mac" recent-files view scans — same set a user would actually drop new files
-// into day to day. Not a full disk crawl: top-level only, per folder, so this stays fast even on a
-// Desktop/Downloads folder with thousands of items.
-const SCAN_ROOTS = ['Desktop', 'Documents', 'Downloads', 'Pictures', 'Movies'].map((name) => path.join(os.homedir(), name));
+// The folders a "This Mac"/"This PC" recent-files view scans — same set a user would actually drop new
+// files into day to day. Not a full disk crawl: top-level only, per folder, so this stays fast even on a
+// Desktop/Downloads folder with thousands of items. Prefers the Electron-resolved real path (correct even
+// if a folder was relocated) and only falls back to a guessed os.homedir() join when that's unavailable
+// (e.g. a bare `node dist/index.js` dev run with no Electron parent) — the guessed name is 'Videos' on
+// Windows, not the macOS-only 'Movies' this used to hardcode unconditionally.
+const SCAN_FOLDER_IDS = ['desktop', 'documents', 'downloads', 'pictures', 'videos'] as const;
+const FALLBACK_NAMES: Record<(typeof SCAN_FOLDER_IDS)[number], string> = {
+  desktop: 'Desktop',
+  documents: 'Documents',
+  downloads: 'Downloads',
+  pictures: 'Pictures',
+  videos: process.platform === 'darwin' ? 'Movies' : 'Videos',
+};
+const SCAN_ROOTS = SCAN_FOLDER_IDS.map((id) => builtinFolderPath(id) ?? path.join(os.homedir(), FALLBACK_NAMES[id]));
 const MAX_PER_FOLDER = 200;
 
 export interface LocalRecentFile {
@@ -21,7 +33,7 @@ const EXT_MIME: Record<string, string> = {
   mp4: 'video/mp4', mov: 'video/quicktime', m4v: 'video/x-m4v', pdf: 'application/pdf',
 };
 
-function guessMime(name: string): string | undefined {
+export function guessMime(name: string): string | undefined {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
   return EXT_MIME[ext];
 }

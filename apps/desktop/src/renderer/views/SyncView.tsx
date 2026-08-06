@@ -9,7 +9,8 @@ import { Modal } from '../components/Modal';
 import { DropdownMenu } from '../components/DropdownMenu';
 import { NearbyPickerModal } from '../components/NearbyPickerModal';
 import { SendableFile } from '../lib/sendActions';
-import { IconSync, IconAdd, IconTrash, IconPhone, IconChevronLeft, IconFiles } from '../icons';
+import { IconSync, IconAdd, IconTrash, IconPhone, IconChevronLeft, IconFiles, IconDevices } from '../icons';
+import { deviceNounLower, fileBrowserName } from '../lib/platformLabels';
 
 const API_BASE = 'http://localhost:4310';
 
@@ -373,6 +374,7 @@ export function SyncView({
   const [rules, setRules] = useState<string[]>([]);
   const [newRule, setNewRule] = useState('');
   const [savingRules, setSavingRules] = useState(false);
+  const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
 
   async function refresh() {
     try {
@@ -383,6 +385,17 @@ export function SyncView({
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    fetch(`${API_BASE}/devices`)
+      .then((res) => res.json())
+      .then((data) => {
+        const names: Record<string, string> = {};
+        for (const d of data.paired ?? []) names[d.id] = d.name;
+        setDeviceNames(names);
+      })
+      .catch(() => {});
+  }, []);
 
   async function loadRules() {
     const res = await fetch(`${API_BASE}/sync/ignore-rules`);
@@ -459,7 +472,7 @@ export function SyncView({
       <div className="view-header">
         <div>
           <h1>Sync</h1>
-          <div className="subtitle">Sync any folder on this Mac to a cloud account, in the background</div>
+          <div className="subtitle">Sync any folder on {deviceNounLower} to a cloud account, in the background</div>
         </div>
         <button className="btn primary" onClick={() => setShowAdd(true)}>
           <IconAdd size={14} /> Add Sync Pair
@@ -471,7 +484,7 @@ export function SyncView({
       {!loading && pairs.length === 0 && (
         <div className="empty-state" style={{ padding: '40px 0' }}>
           <IconSync size={28} />
-          <div style={{ marginTop: 10 }}>No Sync Pairs yet — pick a folder on your Mac and where it should sync to.</div>
+          <div style={{ marginTop: 10 }}>No Sync Pairs yet — pick a folder on {deviceNounLower} and where it should sync to.</div>
         </div>
       )}
 
@@ -479,7 +492,13 @@ export function SyncView({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
           {pairs.map((p) => (
             <div key={p.id} className="glass-card" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 14 }}>
-              <img src={CLOUD_ICONS[baseProviderOf(p.providerId ?? '')]} alt="" style={{ width: 26, height: 26, objectFit: 'contain', flexShrink: 0 }} />
+              {p.targetKind === 'device' ? (
+                <div style={{ width: 26, height: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <IconDevices size={20} />
+                </div>
+              ) : (
+                <img src={CLOUD_ICONS[baseProviderOf(p.providerId ?? '')]} alt="" style={{ width: 26, height: 26, objectFit: 'contain', flexShrink: 0 }} />
+              )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontWeight: 600, fontSize: 13.5 }}>{p.name}</span>
@@ -497,7 +516,9 @@ export function SyncView({
                   <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>{DIRECTION_SHORT[p.direction]}</span>
                 </div>
                 <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.localPath}>
-                  {p.localPath} → {labelFor(p.providerId)}
+                  {p.localPath} → {p.targetKind === 'device'
+                    ? `${deviceNames[p.deviceId ?? ''] ?? 'a paired device'} (${p.deviceFolderKind === 'local-folder' ? 'local folder' : 'cloud folder'})`
+                    : labelFor(p.providerId)}
                 </div>
                 {p.sourceDeviceName && (
                   <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', opacity: 0.75, marginTop: 1 }}>
@@ -537,7 +558,7 @@ export function SyncView({
                 )}
               </div>
               <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                <button className="btn small" onClick={() => window.alliminate.openFolder(p.localPath)}>Open Folder in Finder</button>
+                <button className="btn small" onClick={() => window.alliminate.openFolder(p.localPath)}>Open Folder in {fileBrowserName}</button>
                 {p.status === 'active' && !p.paused && (
                   <button className="btn small" onClick={() => pause(p.id)}>Pause</button>
                 )}

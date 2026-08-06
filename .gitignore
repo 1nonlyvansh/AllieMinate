@@ -35,6 +35,8 @@ apps/backend/sync/bandwidthLimit.json
 apps/backend/syncIgnoreRules.json
 apps/backend/syncPairs.json
 apps/backend/syncTrash/
+apps/backend/syncState/
+apps/backend/local-folder-shortcuts.json
 
 # local test fixtures created while developing the Sync Engine — not part of the app
 .test-sync-folder/
@@ -70,6 +72,7 @@ npm-debug.log*
 # OS cruft
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Editors
 .vscode/

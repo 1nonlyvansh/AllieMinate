@@ -10,6 +10,7 @@ declare global {
       cancelDrop: () => Promise<void>;
       keepPanelOpen: () => Promise<void>;
       notifyPanelDragLeave: () => Promise<void>;
+      notifyPanelHoverLeave: () => Promise<void>;
       dropFilesInPanel: (filePaths: string[], kind?: 'cloud' | 'device' | 'nearby') => Promise<void>;
       switchDropKind: (kind: 'cloud' | 'device') => Promise<void>;
       copyFile: (url: string, filename: string) => Promise<{ ok: boolean; error?: string }>;

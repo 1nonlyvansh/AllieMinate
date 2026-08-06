@@ -4,6 +4,7 @@ import { baseProviderOf } from '@alliminate/shared';
 import type { FolderMeta, ActivityEntry, FilesByFolder, PairedDeviceInfo, ClipboardEntry } from '../lib/types';
 import { formatBytes, timeAgo } from '../lib/format';
 import { IconMac, IconWindows, IconPhone, IconDevices, IconAdd, IconFolder, IconSearch } from '../icons';
+import { isWindows, osName, thisDeviceLabel } from '../lib/platformLabels';
 import { Thumbnail } from '../components/Thumbnail';
 import { PreviewModal, PreviewTarget } from '../components/PreviewModal';
 import { Skeleton } from '../components/Skeleton';
@@ -248,10 +249,10 @@ export function OverviewView({
           <div className="device-strip">
             <div className="device-card glass-card">
               <div className="device-icon">
-                <IconMac size={34} />
+                {isWindows ? <IconWindows size={34} /> : <IconMac size={34} />}
               </div>
-              <div className="device-name">This Mac</div>
-              <div className="device-meta">macOS</div>
+              <div className="device-name">{thisDeviceLabel}</div>
+              <div className="device-meta">{osName}</div>
               <div className="status-pill online">
                 <span className="status-dot online" /> Online
               </div>

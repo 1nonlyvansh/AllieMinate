@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { IconLock } from '../icons';
+import { biometricName } from '../lib/platformLabels';
 
 const API_BASE = 'http://localhost:4310';
 const UNLOCK_POLL_MS = 1500;
@@ -118,7 +119,7 @@ export function LockScreen({ onUnlock }: { onUnlock: () => void }) {
         <IconLock size={30} />
         <div style={{ fontSize: 18, fontWeight: 700, marginTop: 14 }}>AllieMinate is locked</div>
         <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', marginTop: 4, marginBottom: 20 }}>
-          {tryingTouchID ? 'Waiting for Touch ID…' : 'Enter your PIN to continue'}
+          {tryingTouchID ? `Waiting for ${biometricName}…` : 'Enter your PIN to continue'}
         </div>
 
         <input
@@ -139,7 +140,7 @@ export function LockScreen({ onUnlock }: { onUnlock: () => void }) {
 
         {canTouchID && (
           <button className="btn" style={{ width: '100%', marginTop: 8 }} onClick={attemptTouchID} disabled={tryingTouchID}>
-            Use Touch ID
+            Use {biometricName}
           </button>
         )}
 

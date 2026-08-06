@@ -16,7 +16,9 @@ import { registerPhotosRoutes } from './photos';
 import { registerSettingsRoutes } from './settings';
 import { registerLogRoutes } from './logs';
 import { registerSyncPairRoutes } from './syncPairs';
+import { registerLocalFolderRoutes } from './localFolders';
 import { findByToken } from '../pairing';
+import { loadMasterDeviceEnabled } from '../masterDevice';
 import { logTransfer, loadTransferHistory, removeTransferEntry, renameTransferFile, findTransferEntry } from '../transferHistory';
 import { loadReceivePath } from '../receiveSettings';
 import { loadNearbyShareEnabled } from '../nearbyShare';
@@ -173,6 +175,7 @@ export async function buildServer(
   registerSettingsRoutes(app);
   registerLogRoutes(app);
   registerSyncPairRoutes(app, backends);
+  registerLocalFolderRoutes(app);
 
   app.get('/status', async () => ({
     ok: true,
@@ -198,6 +201,11 @@ export async function buildServer(
     // show up in that peer's "Nearby Share" list — a device that's paired but opted out still works
     // through the existing full Devices browsing, it just won't be offered as a quick-drop target.
     nearbyShareEnabled: loadNearbyShareEnabled(),
+    // also read off this same /status body by a paired peer's testConnection — Master/Under is a
+    // relationship computed from real state (own clouds + this toggle + reachability), never from which OS
+    // either side happens to run, so a peer needs both of these to work out whether THIS device currently
+    // qualifies as its Master.
+    masterDeviceEnabled: loadMasterDeviceEnabled(),
   }));
 
   // creates a brand-new empty pinned folder on a chosen cloud account — nothing needs to exist remotely
@@ -361,6 +369,42 @@ export async function buildServer(
     }
 
     return { files: await backend.list(folder.remotePrefix) };
+  });
+
+  // a paired peer browsing this device's cloud folders (RemoteBrowser) proxies delete/rename here — this
+  // device's OWN UI instead goes through /files/trash and /files/rename, which is why these two never
+  // existed before: the receiving side of that proxy was simply never built, so a peer's delete/rename
+  // request 404'd. Reuses the exact same trash-on-delete / get+put+delete-on-rename logic those routes do.
+  app.delete<{ Params: { id: string }; Querystring: { key: string } }>('/folders/:id/file', async (req, reply) => {
+    const folder = folders.find((f) => f.id === req.params.id);
+    if (!folder) return reply.code(404).send({ error: 'folder not found' });
+    const backend = backends.get(folder.provider);
+    if (!backend) return reply.code(409).send({ error: 'provider not configured' });
+
+    const entries = loadTrash();
+    entries.push(await trashOne(backend, folder.provider, folder.id, req.query.key));
+    saveTrash(entries);
+
+    emitSyncEvent({ type: 'file-synced', folderId: folder.id, payload: { key: req.query.key, deleted: true } });
+    return { ok: true };
+  });
+
+  app.patch<{ Params: { id: string }; Querystring: { key: string; newName: string } }>('/folders/:id/file', async (req, reply) => {
+    const folder = folders.find((f) => f.id === req.params.id);
+    if (!folder) return reply.code(404).send({ error: 'folder not found' });
+    const backend = backends.get(folder.provider);
+    if (!backend) return reply.code(409).send({ error: 'provider not configured' });
+
+    const { key, newName } = req.query;
+    if (!newName || newName.includes('/')) return reply.code(400).send({ error: 'invalid name' });
+
+    const newKey = path.posix.join(path.posix.dirname(key), newName);
+    const data = await backend.get(key);
+    await backend.put(newKey, data);
+    await backend.delete(key);
+
+    emitSyncEvent({ type: 'file-synced', folderId: folder.id, payload: { key: newKey, renamedFrom: key } });
+    return { ok: true, key: newKey };
   });
 
   async function filesOf(folder: FolderConfig, backend: StorageBackend) {

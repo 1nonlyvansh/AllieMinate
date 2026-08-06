@@ -7,6 +7,8 @@ import { SetPinModal } from '../components/SetPinModal';
 import { RenameModal } from '../components/RenameModal';
 import { CLOUD_ICONS } from '../lib/cloudIcons';
 import { RecordLogModal } from '../components/RecordLogModal';
+import { thisDeviceLabel, biometricName, deviceNounLower, osName, platformDisplayName } from '../lib/platformLabels';
+import { useDeviceRole } from '../lib/useDeviceRole';
 
 const API_BASE = 'http://localhost:4310';
 
@@ -39,7 +41,7 @@ function AppLockToggle() {
 
   async function toggle() {
     if (enabled) {
-      if (!window.confirm('Turn off App Lock? Anyone with access to this Mac will be able to open AllieMinate.')) return;
+      if (!window.confirm(`Turn off App Lock? Anyone with access to ${deviceNounLower} will be able to open AllieMinate.`)) return;
       await window.security.setEnabled(false);
       setEnabled(false);
     } else {
@@ -222,7 +224,7 @@ function ErrorLogSection() {
     if (selected.size === 0) return;
     const chosen = logs.filter((l) => selected.has(l.id));
     const username = chosen[0]?.username ?? '';
-    const subject = `AllieMinate Mac Error Logs Reporting - ${username}`;
+    const subject = `AllieMinate ${osName} Error Logs Reporting - ${username}`;
     const body = [
       'Log(s) selected:',
       ...chosen.map((l) => `- ${l.id} (${l.kind === 'automated' ? 'Automated' : 'User'}, ${new Date(l.createdAt).toLocaleString()})`),
@@ -240,7 +242,7 @@ function ErrorLogSection() {
       // Mail.app isn't set up / scripting was denied — fall back to a prefilled Gmail draft plus the log
       // folders revealed in Finder, so there's still a path to sending even without Mail.app.
       for (const log of chosen) await window.alliminate.showInFinder(log.dirPath);
-      const fallbackBody = `${body}\n\n(Couldn't open Mail.app automatically — the log folder(s) above were just revealed in Finder. Please drag them into this email before sending.)`;
+      const fallbackBody = `${body}\n\n(Couldn't open your mail app automatically — the log folder(s) above were just revealed in ${fileBrowserName}. Please drag them into this email before sending.)`;
       const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent('vansh080605@gmail.com')}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(fallbackBody)}`;
       await window.alliminate.openExternal(url);
     }
@@ -252,7 +254,7 @@ function ErrorLogSection() {
       <div className="pref-row glass-card">
         <div>
           <div>Record Error Log to System</div>
-          <div className="desc">Describe what went wrong and attach up to 5 screenshots — saved locally on this Mac</div>
+          <div className="desc">Describe what went wrong and attach up to 5 screenshots — saved locally on {deviceNounLower}</div>
         </div>
         <button className="btn small" onClick={() => setShowRecordModal(true)}>Record Error Log to System</button>
       </div>
@@ -449,6 +451,94 @@ function FileCacheSection() {
   );
 }
 
+interface LocalFolderInfo {
+  id: string;
+  name: string;
+  builtin?: boolean;
+}
+
+// what a paired device sees when it browses this device's Local Folders (Devices → a peer → Local
+// Folders tab) — built-in known folders (resolved via Electron so a relocated Desktop/Downloads still
+// works) plus whatever custom shortcuts are added here. Only the custom ones can be removed.
+function LocalFoldersSection() {
+  const [folders, setFolders] = useState<LocalFolderInfo[]>([]);
+  const [shortcutName, setShortcutName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function refresh() {
+    fetch(`${API_BASE}/local-folders`)
+      .then((res) => res.json())
+      .then((data) => setFolders(data.folders ?? []))
+      .catch(() => {});
+  }
+
+  useEffect(refresh, []);
+
+  async function addShortcut() {
+    const picked = await window.alliminate.pickFolder();
+    if (picked.canceled || !picked.path) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/local-folders/custom`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: shortcutName.trim(), path: picked.path }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'could not add that folder');
+      setShortcutName('');
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeShortcut(id: string) {
+    setBusy(true);
+    try {
+      await fetch(`${API_BASE}/local-folders/custom/${id}`, { method: 'DELETE' });
+      refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="section-title">Local Folders Shared With Paired Devices</div>
+      {error && <div className="glass-card empty-state" style={{ color: 'var(--offline)', textAlign: 'left', padding: '10px 16px' }}>{error}</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {folders.map((f) => (
+          <div className="provider-row glass-card" key={f.id}>
+            <div className="provider-info"><div className="name">{f.name}</div></div>
+            {!f.builtin && (
+              <button className="btn small danger-outline" disabled={busy} onClick={() => removeShortcut(f.id)}>
+                Remove
+              </button>
+            )}
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            className="select-field"
+            style={{ flex: 1 }}
+            placeholder="Shortcut name (optional)"
+            value={shortcutName}
+            onChange={(e) => setShortcutName(e.target.value)}
+          />
+          <button className="btn small" disabled={busy} onClick={addShortcut}>
+            {busy ? 'Adding…' : '+ Add Folder Shortcut'}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 const OPEN_WITH_CATEGORIES: { key: string; label: string }[] = [
   { key: 'pdf', label: 'PDF files' },
   { key: 'docx', label: 'Word documents' },
@@ -518,6 +608,7 @@ function GooglePhotosSection() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [waiting, setWaiting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const deviceRole = useDeviceRole();
 
   function refresh() {
     fetch(`${API_BASE}/photos/accounts`)
@@ -584,9 +675,17 @@ function GooglePhotosSection() {
             </button>
           </div>
         ))}
-        <button className="btn small" style={{ alignSelf: 'flex-start' }} disabled={busyId === 'add' || accounts.length >= 7} onClick={addAccount}>
-          {busyId === 'add' ? 'Waiting…' : accounts.length >= 7 ? 'Max 7 accounts linked' : '+ Add Google Photos account'}
-        </button>
+        {deviceRole.isUnderDevice ? (
+          <div className="meta" style={{ fontSize: 11.5 }}>
+            {thisDeviceLabel} connects through{' '}
+            {deviceRole.masterPeer ? `${deviceRole.masterPeer.name}'s` : 'a paired device’s'} Google Photos, not its
+            own — pair a Master Device from Devices to browse there.
+          </div>
+        ) : (
+          <button className="btn small" style={{ alignSelf: 'flex-start' }} disabled={busyId === 'add' || accounts.length >= 7} onClick={addAccount}>
+            {busyId === 'add' ? 'Waiting…' : accounts.length >= 7 ? 'Max 7 accounts linked' : '+ Add Google Photos account'}
+          </button>
+        )}
       </div>
     </>
   );
@@ -596,10 +695,12 @@ export function SettingsView({
   connected,
   storage,
   onRefresh,
+  onGoToDevices,
 }: {
   connected: string[];
   storage: ProviderStorage[];
   onRefresh: () => void;
+  onGoToDevices: () => void;
 }) {
   const [connectTarget, setConnectTarget] = useState<{ id: StorageProviderId; name: string; kind: 's3' | 'mega' } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -609,6 +710,7 @@ export function SettingsView({
   const [renamingAccount, setRenamingAccount] = useState<DriveAccountInfo | null>(null);
   const [pcloudConfigured, setPcloudConfigured] = useState(true); // assume yes until we hear otherwise, avoids a flash of "needs setup"
   const [onedriveConfigured, setOnedriveConfigured] = useState(true);
+  const deviceRole = useDeviceRole();
 
   async function refreshAccounts() {
     const res = await fetch(`${API_BASE}/accounts`);
@@ -778,6 +880,16 @@ export function SettingsView({
 
       <div className="settings-group">
         <div className="section-title">Connected Clouds</div>
+        {deviceRole.isUnderDevice && (
+          <div className="glass-card empty-state" style={{ textAlign: 'left', padding: '10px 16px', marginBottom: 8 }}>
+            {thisDeviceLabel} is an Under Device — it browses clouds through{' '}
+            {deviceRole.masterPeer ? `${deviceRole.masterPeer.name} (${platformDisplayName(deviceRole.masterPeer.platform)})` : 'a paired device'}{' '}
+            instead of connecting its own.{' '}
+            <button className="btn small" onClick={onGoToDevices}>
+              Pair a Master Device
+            </button>
+          </div>
+        )}
         {ALL_PROVIDERS.map((p) => {
           const isConnected = connected.includes(p.id);
           // Google Drive is multi-account — the top-level row should read as "everything linked under
@@ -815,7 +927,7 @@ export function SettingsView({
                 </div>
                 <button
                   className={`btn ${isConnected ? 'danger-outline' : 'primary'}`}
-                  disabled={busyId === p.id || (!isConnected && !buildable) || (!isConnected && needsSetup)}
+                  disabled={busyId === p.id || (!isConnected && !buildable) || (!isConnected && needsSetup) || (!isConnected && deviceRole.isUnderDevice)}
                   onClick={() => {
                     if (isConnected) return logOut(p.id);
                     if (p.kind === 'oauth') return logInOAuth(p.id);
@@ -895,7 +1007,7 @@ export function SettingsView({
       <div className="settings-group">
         <div className="section-title">Security</div>
         <div className="pref-row glass-card">
-          <div><div>App Lock</div><div className="desc">Require Touch ID or PIN to open AllieMinate</div></div>
+          <div><div>App Lock</div><div className="desc">Require {biometricName} or PIN to open AllieMinate</div></div>
           <AppLockToggle />
         </div>
       </div>
@@ -903,7 +1015,7 @@ export function SettingsView({
       <div className="settings-group">
         <div className="section-title">Devices</div>
         <div className="pref-row glass-card">
-          <div><div>Master Device</div><div className="desc">Let your phone and other devices pair with this Mac and browse its connected clouds</div></div>
+          <div><div>Master Device</div><div className="desc">Let your phone and other devices pair with {deviceNounLower} and browse its connected clouds</div></div>
           <MasterDeviceToggle />
         </div>
         <div className="pref-row glass-card">
@@ -916,7 +1028,7 @@ export function SettingsView({
       <div className="settings-group">
         <div className="section-title">General</div>
         <div className="pref-row glass-card">
-          <div><div>Open at Boot</div><div className="desc">Start AllieMinate automatically when you sign in to your Mac</div></div>
+          <div><div>Open at Boot</div><div className="desc">Start AllieMinate automatically when you sign in</div></div>
           <LaunchAtLoginToggle />
         </div>
         <div className="pref-row glass-card">
@@ -926,6 +1038,7 @@ export function SettingsView({
 
         <DefaultAppsSection />
         <FileCacheSection />
+        <LocalFoldersSection />
 
         <div className="section-title">Danger Zone</div>
         <button

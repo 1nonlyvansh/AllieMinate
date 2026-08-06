@@ -10,6 +10,11 @@ import { isAppLockEnabled, setAppLockEnabled, verifyPin, canUseTouchID, tryTouch
 import { connectUsbTunnel, disconnectUsbTunnel, launchPairDeepLink } from './adb';
 import { composeMailWithAttachments } from './mail';
 
+// package.json's "name" is the scoped npm id "@alliminate/desktop" — without this, Electron derives
+// app.getName() straight from it, so every app.getPath() (userData, cache, logs...) resolves under a
+// literal "@alliminate/desktop" folder instead of a proper "AllieMinate" one.
+app.setName('AllieMinate');
+
 // this app keeps running via the tray after the main window closes, which makes it very easy for the
 // user to launch it again (Spotlight, Dock, double-click) without realizing it's already alive —
 // previously nothing stopped a second full process from starting: its own main window, its OWN second
@@ -64,7 +69,19 @@ function spawnBackend(): void {
 
   const logStream = fs.createWriteStream(logPath, { flags: 'a' });
   backendProcess = spawn(process.execPath, [backendEntry], {
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
+      // the backend is a plain Node child process with no Electron runtime, so it can't call
+      // app.getPath() itself for the local-folder-browsing feature's known folders — resolve them here
+      // (correct even if the user relocated one via the registry/Finder) and hand them down as env vars.
+      ALLIMINATE_FOLDER_DESKTOP: app.getPath('desktop'),
+      ALLIMINATE_FOLDER_DOWNLOADS: app.getPath('downloads'),
+      ALLIMINATE_FOLDER_DOCUMENTS: app.getPath('documents'),
+      ALLIMINATE_FOLDER_PICTURES: app.getPath('pictures'),
+      ALLIMINATE_FOLDER_VIDEOS: app.getPath('videos'),
+      ALLIMINATE_FOLDER_MUSIC: app.getPath('music'),
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   backendProcess.stdout?.pipe(logStream);
@@ -220,12 +237,13 @@ app.whenReady().then(async () => {
   if (process.platform === 'darwin') app.dock?.show();
   await ensureBackend();
   createMainWindow();
-  if (process.platform === 'darwin') createTray();
+  createTray();
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
+// this app keeps running via the tray after the main window closes on every platform (see spawnBackend's
+// comment above) — quitting is user-driven via the tray's Quit item (or Cmd+Q's default app-menu handler
+// on macOS), not a side effect of closing the last window.
+app.on('window-all-closed', () => {});
 
 // fires in the FIRST process when a second launch attempt happens — bring the existing window forward
 // instead of leaving the user staring at nothing while a doomed second process spins up and quits.

@@ -3,6 +3,8 @@ import type { FileEntry, FolderNode, ProviderStorage } from '@alliminate/shared'
 import { baseProviderOf } from '@alliminate/shared';
 import type { FolderMeta, ClipboardEntry, ClipboardFileItem, SyncPair } from '../lib/types';
 import { formatBytes, broadCategorize } from '../lib/format';
+import { useDeviceRole } from '../lib/useDeviceRole';
+import { thisDeviceLabel } from '../lib/platformLabels';
 import { IconChevronLeft, IconSearch, IconCloud, IconAdd, IconFolder, IconSync } from '../icons';
 import { Thumbnail } from '../components/Thumbnail';
 import { DropdownMenu } from '../components/DropdownMenu';
@@ -74,6 +76,7 @@ export function CloudServicesView({
   const [pending, setPending] = useState<PendingAction>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const [progress, setProgress] = useState<{ label: string; done: number; total: number } | null>(null);
+  const deviceRole = useDeviceRole();
   const [nearbyTarget, setNearbyTarget] = useState<{ file: SendableFile; name: string } | null>(null);
   const devices = usePairedDevices();
   const [syncPairs, setSyncPairs] = useState<SyncPair[]>([]);
@@ -365,7 +368,11 @@ export function CloudServicesView({
         {!appLoading && connected.length === 0 && (
           <div className="glass-card empty-state">
             <IconCloud size={26} />
-            <div style={{ marginTop: 10 }}>No clouds connected yet — connect one from Settings.</div>
+            <div style={{ marginTop: 10 }}>
+              {deviceRole.isUnderDevice
+                ? `No clouds of its own — browse ${deviceRole.masterPeer ? deviceRole.masterPeer.name : 'your paired device'}'s clouds from Devices instead.`
+                : 'No clouds connected yet — connect one from Settings.'}
+            </div>
           </div>
         )}
 
@@ -505,7 +512,7 @@ export function CloudServicesView({
                   <IconSync size={28} />
                 </div>
                 <div className="folder-name">{p.name}</div>
-                <div className="folder-meta">Synced from Mac</div>
+                <div className="folder-meta">Synced from {thisDeviceLabel}</div>
               </div>
             ))}
           {subFolders

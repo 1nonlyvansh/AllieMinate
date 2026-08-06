@@ -122,9 +122,37 @@ export function addToCache(providerKey: string, sourceKey: string, data: Buffer,
   return filePath;
 }
 
+/** Real on-disk usage under CACHE_DIR, walked directly rather than trusting the index's recorded sizes —
+ * self-healing if the index and disk ever drift (a crash mid-write, a file dropped in some other way),
+ * and it's what actually answers "how much space is this cache using," which is the whole point of a
+ * usage meter. */
+function usedBytesOnDisk(): number {
+  let total = 0;
+  function walk(dir: string): void {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isFile() && entry.name !== 'index.json') {
+        try {
+          total += fs.statSync(full).size;
+        } catch {
+          // file vanished between readdir and stat — skip it
+        }
+      }
+    }
+  }
+  walk(CACHE_DIR);
+  return total;
+}
+
 export function getCacheStatus(): { usedBytes: number; maxBytes: number } {
-  const entries = loadIndex();
-  return { usedBytes: entries.reduce((sum, e) => sum + e.size, 0), maxBytes: loadCacheSettings().maxBytes };
+  return { usedBytes: usedBytesOnDisk(), maxBytes: loadCacheSettings().maxBytes };
 }
 
 export function clearCache(): void {

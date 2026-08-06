@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { Modal } from './Modal';
+import { deviceNounLower } from '../lib/platformLabels';
 
 const API_BASE = 'http://localhost:4310';
 const CODE_TTL_SECONDS = 5 * 60;
@@ -144,7 +145,7 @@ export function PairAndroidModal({ onClose, onPaired }: { onClose: () => void; o
       if (!res.ok) throw new Error(data.error ?? `server returned ${res.status}`);
       if (!data.code) throw new Error('no pairing code returned');
 
-      const launch = await window.usbPairing.launchPairDeepLink(data.code, data.deviceName ?? 'this Mac');
+      const launch = await window.usbPairing.launchPairDeepLink(data.code, data.deviceName ?? deviceNounLower);
       if (!launch.ok) throw new Error(launch.error ?? 'could not open AllieMinate on the phone');
 
       setWaitingForPhone(true);
@@ -244,11 +245,11 @@ export function PairAndroidModal({ onClose, onPaired }: { onClose: () => void; o
       ) : (
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', marginBottom: 14 }}>
-            1. Connect your phone to this Mac with a USB cable.
+            1. Connect your phone to {deviceNounLower} with a USB cable.
             <br />
             2. Tap Connect — AllieMinate opens on your phone and asks you to confirm.
             <br />
-            <span style={{ fontSize: 11 }}>(First time only: your phone may also ask you to trust this Mac for USB debugging.)</span>
+            <span style={{ fontSize: 11 }}>(First time only: your phone may also ask you to trust {deviceNounLower} for USB debugging.)</span>
           </div>
 
           {!usbConnecting && !waitingForPhone && <button className="btn primary" onClick={connectUsb}>Connect</button>}
