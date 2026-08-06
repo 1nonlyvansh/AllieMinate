@@ -618,19 +618,23 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
     }
   });
 
-  app.get<{ Params: { id: string; folderId: string } }>('/devices/:id/local-folders/:folderId/files', async (req, reply) => {
-    const peer = findPeer(req.params.id);
-    if (!peer) return reply.code(404).send({ error: 'device not paired' });
-    try {
-      const res = await fetch(`http://${peer.host}/local-folders/${req.params.folderId}/files`, {
-        headers: { Authorization: `Bearer ${peer.token}` },
-      });
-      if (!res.ok) return reply.code(502).send({ error: 'device unreachable' });
-      return res.json();
-    } catch (err) {
-      return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) });
-    }
-  });
+  app.get<{ Params: { id: string; folderId: string }; Querystring: { path?: string } }>(
+    '/devices/:id/local-folders/:folderId/files',
+    async (req, reply) => {
+      const peer = findPeer(req.params.id);
+      if (!peer) return reply.code(404).send({ error: 'device not paired' });
+      const qs = req.query.path ? `?path=${encodeURIComponent(req.query.path)}` : '';
+      try {
+        const res = await fetch(`http://${peer.host}/local-folders/${req.params.folderId}/files${qs}`, {
+          headers: { Authorization: `Bearer ${peer.token}` },
+        });
+        if (!res.ok) return reply.code(502).send({ error: 'device unreachable' });
+        return res.json();
+      } catch (err) {
+        return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) });
+      }
+    },
+  );
 
   app.get<{ Params: { id: string; folderId: string }; Querystring: { key: string } }>(
     '/devices/:id/local-folders/:folderId/download',

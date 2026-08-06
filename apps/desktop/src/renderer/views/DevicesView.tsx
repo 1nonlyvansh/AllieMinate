@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { PairedDeviceInfo, RemoteFolder, ClipboardEntry } from '../lib/types';
 import type { FileEntry, ProviderStorage } from '@alliminate/shared';
 import { formatBytes, broadCategorize } from '../lib/format';
-import { IconMac, IconWindows, IconPhone, IconDevices, IconChevronLeft, IconAdd, IconImage, IconVideo, IconAudio, IconDocument, IconArchive, IconFiles } from '../icons';
+import { IconMac, IconWindows, IconPhone, IconDevices, IconChevronLeft, IconAdd, IconImage, IconVideo, IconAudio, IconDocument, IconArchive, IconFiles, IconFolder } from '../icons';
 import { isWindows, osName, thisDeviceLabel, showInFileBrowserLabel } from '../lib/platformLabels';
 import { PairDeviceModal } from '../components/PairDeviceModal';
 import { PairAndroidModal } from '../components/PairAndroidModal';
@@ -10,6 +10,7 @@ import { RenameModal } from '../components/RenameModal';
 import { DropdownMenu } from '../components/DropdownMenu';
 import { Modal } from '../components/Modal';
 import { ProviderPickerModal } from '../components/ProviderPickerModal';
+import { Thumbnail } from '../components/Thumbnail';
 import { timeAgo } from '../lib/format';
 
 const API_BASE = 'http://localhost:4310';
@@ -198,6 +199,10 @@ function RemoteBrowser({
   const [folders, setFolders] = useState<RemoteFolder[] | null>(null);
   const [activeFolder, setActiveFolder] = useState<RemoteFolder | null>(null);
   const [files, setFiles] = useState<DeviceFileEntry[]>([]);
+  // real subdirectories inside the active local folder (e.g. Desktop/Screenshots) — only local-folder
+  // browsing has these; cloud-folder categories are already a flat provider listing.
+  const [subFolders, setSubFolders] = useState<{ name: string; path: string }[]>([]);
+  const [subPath, setSubPath] = useState('');
   const [filesLoading, setFilesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filesError, setFilesError] = useState<string | null>(null);
@@ -265,15 +270,30 @@ function RemoteBrowser({
   function openCategory(f: RemoteFolder) {
     setActiveFolder(f);
     setSelected(new Set());
+    loadFiles(f, '');
+  }
+
+  // navigates into a real subdirectory of the active local folder (e.g. Desktop → Screenshots) — local
+  // folders only, cloud categories have no subpath concept.
+  function openSubfolder(relPath: string) {
+    if (!activeFolder) return;
+    setSelected(new Set());
+    loadFiles(activeFolder, relPath);
+  }
+
+  function loadFiles(f: RemoteFolder, path: string) {
+    setSubPath(path);
     setFilesLoading(true);
     setFilesError(null);
-    fetch(`${API_BASE}/devices/${device.id}/${apiSegment}/${f.id}/files`)
+    const qs = browseMode === 'local' && path ? `?path=${encodeURIComponent(path)}` : '';
+    fetch(`${API_BASE}/devices/${device.id}/${apiSegment}/${f.id}/files${qs}`)
       .then((res) => res.json())
       .then((data) => {
         // some categories (permission not granted, or a non-fatal per-category read error) come back
         // with BOTH an `error` explaining why and an empty `files` list — that's not fatal to the whole
         // browser, just this one category, so it stays inline instead of replacing the sidebar.
         setFiles(data.files ?? []);
+        setSubFolders(data.folders ?? []);
         setFilesError(data.error ?? null);
       })
       .catch((err) => setFilesError(err instanceof Error ? err.message : String(err)))
@@ -384,9 +404,8 @@ function RemoteBrowser({
     setSelected(new Set());
   }
 
-  // thumbnails and cloud-copy only exist for the cloud-folder proxy route family — local folders have
-  // no thumbnail generator (a plain OS file, not a MediaStore-backed image/video) and "copy to cloud"
-  // doesn't apply to a file that's already sitting on a plain local disk, not fetched through a provider.
+  // "copy to cloud" only exists for the cloud-folder proxy route family — it doesn't apply to a file
+  // that's already sitting on a plain local disk, not fetched through a provider.
   const isMediaCategory = browseMode === 'cloud' && (activeFolder?.id === 'images' || activeFolder?.id === 'videos');
 
   function menuItemsFor(f: DeviceFileEntry) {
@@ -412,7 +431,33 @@ function RemoteBrowser({
             <IconChevronLeft size={12} /> Back
           </button>
           <h1>{device.name}</h1>
-          <p>{activeFolder ? activeFolder.name : 'Browsing this device'}</p>
+          <p>
+            {activeFolder ? (
+              <>
+                <span className="crumb-link" onClick={() => openCategory(activeFolder)} style={{ cursor: subPath ? 'pointer' : 'default' }}>
+                  {activeFolder.name}
+                </span>
+                {subPath && subPath.split('/').map((seg, i, arr) => {
+                  const crumbPath = arr.slice(0, i + 1).join('/');
+                  const isLast = i === arr.length - 1;
+                  return (
+                    <React.Fragment key={crumbPath}>
+                      {' / '}
+                      <span
+                        className="crumb-link"
+                        onClick={() => !isLast && openSubfolder(crumbPath)}
+                        style={{ cursor: isLast ? 'default' : 'pointer' }}
+                      >
+                        {seg}
+                      </span>
+                    </React.Fragment>
+                  );
+                })}
+              </>
+            ) : (
+              'Browsing this device'
+            )}
+          </p>
         </div>
       </div>
 
@@ -469,14 +514,31 @@ function RemoteBrowser({
 
             <div className="folder-grid" style={{ alignContent: 'start', alignItems: 'start' }}>
               {filesLoading && <div className="empty-state">Loading…</div>}
-              {!filesLoading && files.length === 0 && (
+              {!filesLoading && files.length === 0 && subFolders.length === 0 && (
                 <div className="empty-state" style={filesError ? { color: 'var(--offline)' } : undefined}>
                   {filesError ?? 'Nothing here yet'}
                 </div>
               )}
+              {!filesLoading && subFolders.map((sf) => (
+                <div
+                  key={sf.path}
+                  className="folder-card glass-card"
+                  style={{ position: 'relative', cursor: 'pointer' }}
+                  onClick={() => openSubfolder(sf.path)}
+                >
+                  <div className="folder-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 48 }}>
+                    <IconFolder size={30} />
+                  </div>
+                  <div className="folder-name" title={sf.name}>{sf.name}</div>
+                  <div className="folder-meta">Folder</div>
+                </div>
+              ))}
               {!filesLoading && files.map((f) => {
-                const category = broadCategorize(f.path, f.mimeType);
                 const name = f.path.split('/').pop() ?? f.path;
+                const downloadUrl = `${API_BASE}/devices/${device.id}/${apiSegment}/${activeFolder!.id}/download?key=${encodeURIComponent(f.path)}`;
+                const remoteThumbUrl = isMediaCategory
+                  ? `${API_BASE}/devices/${device.id}/${apiSegment}/${activeFolder!.id}/thumbnail?key=${encodeURIComponent(f.path)}`
+                  : undefined;
                 return (
                   <div key={f.path} className="folder-card glass-card" style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setPreviewFile(f)}>
                     <input
@@ -490,16 +552,17 @@ function RemoteBrowser({
                       <DropdownMenu items={menuItemsFor(f)} />
                     </div>
                     <div className="folder-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 48 }}>
-                      {isMediaCategory ? (
-                        <img
-                          src={`${API_BASE}/devices/${device.id}/${apiSegment}/${activeFolder!.id}/thumbnail?key=${encodeURIComponent(f.path)}`}
-                          alt=""
-                          style={{ width: '100%', height: 48, objectFit: 'cover', borderRadius: 6 }}
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                        />
-                      ) : (
-                        categoryIcon(category, 30)
-                      )}
+                      {/* remoteThumbUrl (cloud Images/Videos categories) uses the provider's own cheap
+                          pre-generated thumbnail; everything else (local folders, and non-media cloud
+                          categories like Documents) renders a real client-side preview straight off the
+                          download route instead of a generic file-type icon. */}
+                      <Thumbnail
+                        fileKey={f.path}
+                        name={name}
+                        size={f.size}
+                        thumbnailUrl={remoteThumbUrl}
+                        directUrl={remoteThumbUrl ? undefined : downloadUrl}
+                      />
                     </div>
                     <div className="folder-name" title={name}>{name}</div>
                     <div className="folder-meta">{formatBytes(f.size)}</div>

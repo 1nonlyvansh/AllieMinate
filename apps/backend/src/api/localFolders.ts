@@ -43,33 +43,47 @@ export function registerLocalFolderRoutes(app: FastifyInstance): void {
     return { ok: true };
   });
 
-  app.get<{ Params: { id: string } }>('/local-folders/:id/files', async (req, reply) => {
+  app.get<{ Params: { id: string }; Querystring: { path?: string } }>('/local-folders/:id/files', async (req, reply) => {
     const folder = findLocalFolder(req.params.id);
     if (!folder) return reply.code(404).send({ error: 'folder not found' });
 
+    // ?path= is a relative subpath WITHIN this folder (e.g. "Screenshots" or "Screenshots/2026") — lets the
+    // browser navigate into real subfolders instead of only ever seeing this folder's top level, which
+    // previously silently dropped every subdirectory (Desktop/Downloads/etc routinely have most of their
+    // actual content one level down, e.g. under a "Personal" or "Screenshots" folder).
+    const subPath = req.query.path ?? '';
+    const dirPath = subPath ? path.join(folder.path, subPath) : folder.path;
+    if (!isAllowedLocalFolderPath(dirPath)) return reply.code(403).send({ error: 'path not allowed' });
+
     let names: string[];
     try {
-      names = await fsp.readdir(folder.path);
+      names = await fsp.readdir(dirPath);
     } catch (err) {
       // non-fatal per-folder, same as Android's per-category error surfacing — a permission error on one
       // folder shouldn't read as "this whole feature is broken."
-      return { files: [], error: err instanceof Error ? err.message : String(err) };
+      return { files: [], folders: [], path: subPath, error: err instanceof Error ? err.message : String(err) };
     }
 
     const files: LocalFileEntry[] = [];
+    const folders: { name: string; path: string }[] = [];
     for (const name of names.slice(0, MAX_PER_FOLDER)) {
       if (name.startsWith('.')) continue;
-      const full = path.join(folder.path, name);
+      const full = path.join(dirPath, name);
+      const relPath = subPath ? `${subPath}/${name}` : name;
       try {
         const stat = await fsp.stat(full);
-        if (!stat.isFile()) continue;
-        files.push({ path: name, size: stat.size, hash: '', modifiedAt: stat.mtime.toISOString(), mimeType: guessMime(name) });
+        if (stat.isDirectory()) {
+          folders.push({ name, path: relPath });
+        } else if (stat.isFile()) {
+          files.push({ path: relPath, size: stat.size, hash: '', modifiedAt: stat.mtime.toISOString(), mimeType: guessMime(name) });
+        }
       } catch {
         // vanished between readdir and stat — skip it
       }
     }
     files.sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime());
-    return { files };
+    folders.sort((a, b) => a.name.localeCompare(b.name));
+    return { files, folders, path: subPath };
   });
 
   app.get<{ Params: { id: string }; Querystring: { key: string } }>('/local-folders/:id/download', async (req, reply) => {
