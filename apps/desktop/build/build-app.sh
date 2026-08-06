@@ -112,11 +112,45 @@ cp "$DESKTOP/build/AllieMinate.icns" "$APP_RES/AllieMinate.icns"
 /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AllieMinate.icns" "$BUILD_APP/Contents/Info.plist"
 
 echo "== code signing (ad-hoc) =="
+# node_modules copied via cp -RL can pick up resource-fork/FinderInfo extended attrs (esp. from
+# node-gyp-built native deps) that make codesign fail with "resource fork, Finder information,
+# or similar detritus not allowed" — strip them before signing.
+xattr -cr "$BUILD_APP"
 codesign --force --deep --sign - "$BUILD_APP"
 
 echo "== installing to $INSTALL_DIR =="
 mkdir -p "$INSTALL_DIR"
 rm -rf "$INSTALL_DIR/$APP_NAME.app"
 cp -R "$BUILD_APP" "$INSTALL_DIR/$APP_NAME.app"
+
+# --- distributable .dmg — a real double-click-and-drag-to-Applications installer, built from the same
+# freshly-assembled $BUILD_APP the dev install above uses (still valid here, before the EXIT trap wipes
+# the staging dir). Runs from a copy in its own empty source folder — create-dmg (and the Finder-scripting
+# it does under the hood) gets confused if anything besides the .app and the Applications symlink it adds
+# itself is sitting in the source dir. ---
+echo "== building AllieMinate.dmg =="
+DMG_SRC="$BUILD_STAGING/dmg-src"
+mkdir -p "$DMG_SRC"
+cp -R "$BUILD_APP" "$DMG_SRC/$APP_NAME.app"
+DMG_OUT="$DESKTOP/build/$APP_NAME.dmg"
+rm -f "$DMG_OUT"
+create-dmg \
+  --volname "$APP_NAME" \
+  --volicon "$DESKTOP/build/AllieMinate.icns" \
+  --window-pos 200 120 \
+  --window-size 660 400 \
+  --icon-size 100 \
+  --icon "$APP_NAME.app" 180 170 \
+  --hide-extension "$APP_NAME.app" \
+  --app-drop-link 480 170 \
+  --no-internet-enable \
+  "$DMG_OUT" \
+  "$DMG_SRC" \
+  || echo "create-dmg exited non-zero (it does this on some harmless Finder-layout races) — checking output anyway"
+if [ -f "$DMG_OUT" ]; then
+  echo "done: $DMG_OUT"
+else
+  echo "!! .dmg build failed — dev install above still succeeded, see output for the actual error"
+fi
 
 echo "done: $INSTALL_DIR/$APP_NAME.app"
