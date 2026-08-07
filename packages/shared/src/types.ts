@@ -108,7 +108,10 @@ export interface UniversalSyncInvite {
   id: string;
   hostDeviceId: string;
   hostDeviceName: string;
-  /** the host's own SyncPair id for this folder — the invited device's resulting SyncPair points at this. */
+  /** the host's local-folders shortcut id for this folder (NOT its own SyncPair id — a spoke's
+   * DeviceSyncTarget only ever addresses /folders/:id/* or /local-folders/:id/*, so the host registers a
+   * local-folders shortcut for its own local path and invites point at that instead). The invited
+   * device's resulting SyncPair uses this as its deviceFolderId with deviceFolderKind:'local-folder'. */
   hostFolderId: string;
   /** shared across the host pair and every accepted spoke pair, purely for UI grouping ("N devices
    * connected") — sync itself doesn't need it, each spoke is a normal device-target SyncPair. */

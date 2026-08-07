@@ -8,6 +8,7 @@ import { emitSyncEvent } from '../events';
 import { getDeviceIdentity } from '../device';
 import { getSyncPair, createSyncPair, updateSyncPair } from '../sync/syncPairs';
 import { startSyncPair } from '../sync/engine';
+import { addCustomFolder } from '../localFolders';
 import { loadInvites, getInvite, addInvite, updateInviteStatus, sendInvites, startInviteRetryLoop } from '../universalSync';
 
 /** Universal Sync Folder — a folder that appears as a normal local folder on every granted device,
@@ -15,7 +16,15 @@ import { loadInvites, getInvite, addInvite, updateInviteStatus, sendInvites, sta
  * "host"). Every other granted device gets an ordinary targetKind:'device' SyncPair pointed at the
  * host, exactly like AddSyncPairModal's existing "Paired Device" option already builds — this file only
  * adds the part that doesn't exist yet: the host pushing an invite to each granted device so the pair
- * shows up on their end without them manually setting anything up. */
+ * shows up on their end without them manually setting anything up.
+ *
+ * A spoke's DeviceSyncTarget only ever hits one of two URL families on the host: /folders/:id/* (a
+ * cloud-backed FolderConfig) or /local-folders/:id/* (a real OS folder shortcut — see localFolders.ts,
+ * upload included). The host's own Universal Sync folder is a SyncPair, a THIRD, separate id namespace
+ * that neither of those routes knows about — pointing a spoke at the raw SyncPair id would 404 on every
+ * request. Fixed by also registering the host's local path as a local-folders shortcut and using THAT
+ * shortcut's id as hostFolderId — spokes then ride the already-complete, already-working local-folders
+ * route family (list/download/upload/delete/rename) with zero new peer-facing routes needed. */
 export function registerUniversalSyncRoutes(app: FastifyInstance, backends: Map<string, StorageBackend>): void {
   startInviteRetryLoop();
 
@@ -58,7 +67,7 @@ export function registerUniversalSyncRoutes(app: FastifyInstance, backends: Map<
         targetKind: 'device',
         deviceId: invite.hostDeviceId,
         deviceFolderId: invite.hostFolderId,
-        deviceFolderKind: 'folder',
+        deviceFolderKind: 'local-folder',
         remotePath: '',
         direction: PERMISSION_TO_DIRECTION[invite.permission],
         status: 'active',
@@ -99,11 +108,14 @@ export function registerUniversalSyncRoutes(app: FastifyInstance, backends: Map<
     const universalSyncId = crypto.randomUUID();
     updateSyncPair(hostFolderId, { universalSyncId });
 
+    // see the class-level comment above — spokes need a local-folders shortcut id, not the raw SyncPair id.
+    const shortcut = addCustomFolder(name.trim(), hostPair.localPath);
+
     const me = getDeviceIdentity();
     await sendInvites(grants, {
       hostDeviceId: me.id,
       hostDeviceName: me.name,
-      hostFolderId,
+      hostFolderId: shortcut.id,
       universalSyncId,
       name: name.trim(),
       status: 'pending',
