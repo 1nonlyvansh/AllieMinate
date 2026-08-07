@@ -159,13 +159,19 @@ export function registerProviderRoutes(
         httpRes.end('<h2>AllieMinate connected to Google Drive.</h2><p>You can close this tab.</p>');
         emitSyncEvent({ type: 'status', folderId: '', payload: { provider: 'google-drive', connected: true } });
       } catch (err) {
-        httpRes.writeHead(500);
-        httpRes.end('token exchange failed — check the AllieMinate backend terminal');
-        emitSyncEvent({
-          type: 'error',
-          folderId: '',
-          payload: { message: err instanceof Error ? err.message : String(err) },
-        });
+        // the packaged .app has no visible terminal at all — "check the backend terminal" was a dead end
+        // for anyone but a from-source dev running `npm start` in an actual shell. Show the real Google
+        // error text right here instead, since this browser tab is the only place a normal user (or
+        // someone helping them remotely) will ever actually see this failure.
+        const message = err instanceof Error ? err.message : String(err);
+        httpRes.writeHead(500, { 'Content-Type': 'text/html' });
+        httpRes.end(
+          `<h2>Google Drive connection failed</h2><p>${message.replace(/</g, '&lt;')}</p>` +
+          '<p>Common causes: the Client ID/Secret in .env has a typo or stray whitespace (easy to introduce ' +
+          'pasting into TextEdit), the OAuth client isn’t type "Desktop app" in Google Cloud Console, or ' +
+          'this Google account isn’t added as a test user on the OAuth consent screen yet.</p>',
+        );
+        emitSyncEvent({ type: 'error', folderId: '', payload: { message } });
       } finally {
         if (oauthTimeout) clearTimeout(oauthTimeout);
         oauthServer?.close();
@@ -301,11 +307,11 @@ export function registerProviderRoutes(
         emitSyncEvent({ type: 'status', folderId: '', payload: { provider: accountId, connected: true } });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        httpRes.writeHead(message === 'Account already linked' ? 409 : 500);
+        httpRes.writeHead(message === 'Account already linked' ? 409 : 500, { 'Content-Type': 'text/html' });
         httpRes.end(
           message === 'Account already linked'
             ? '<h2>Account already linked</h2><p>This Google account is already connected to AllieMinate. You can close this tab.</p>'
-            : 'token exchange failed — check the AllieMinate backend terminal',
+            : `<h2>Google Drive connection failed</h2><p>${message.replace(/</g, '&lt;')}</p>`,
         );
         emitSyncEvent({ type: 'error', folderId: '', payload: { message } });
       } finally {
@@ -379,13 +385,10 @@ export function registerProviderRoutes(
         httpRes.end('<h2>AllieMinate connected to pCloud.</h2><p>You can close this tab.</p>');
         emitSyncEvent({ type: 'status', folderId: '', payload: { provider: 'pcloud', connected: true } });
       } catch (err) {
-        httpRes.writeHead(500);
-        httpRes.end('token exchange failed — check the AllieMinate backend terminal');
-        emitSyncEvent({
-          type: 'error',
-          folderId: '',
-          payload: { message: err instanceof Error ? err.message : String(err) },
-        });
+        const message = err instanceof Error ? err.message : String(err);
+        httpRes.writeHead(500, { 'Content-Type': 'text/html' });
+        httpRes.end(`<h2>pCloud connection failed</h2><p>${message.replace(/</g, '&lt;')}</p>`);
+        emitSyncEvent({ type: 'error', folderId: '', payload: { message } });
       } finally {
         if (pcloudTimeout) clearTimeout(pcloudTimeout);
         pcloudServer?.close();
@@ -470,13 +473,10 @@ export function registerProviderRoutes(
         httpRes.end('<h2>AllieMinate connected to OneDrive.</h2><p>You can close this tab.</p>');
         emitSyncEvent({ type: 'status', folderId: '', payload: { provider: 'onedrive', connected: true } });
       } catch (err) {
-        httpRes.writeHead(500);
-        httpRes.end('token exchange failed — check the AllieMinate backend terminal');
-        emitSyncEvent({
-          type: 'error',
-          folderId: '',
-          payload: { message: err instanceof Error ? err.message : String(err) },
-        });
+        const message = err instanceof Error ? err.message : String(err);
+        httpRes.writeHead(500, { 'Content-Type': 'text/html' });
+        httpRes.end(`<h2>OneDrive connection failed</h2><p>${message.replace(/</g, '&lt;')}</p>`);
+        emitSyncEvent({ type: 'error', folderId: '', payload: { message } });
       } finally {
         if (onedriveTimeout) clearTimeout(onedriveTimeout);
         onedriveServer?.close();
