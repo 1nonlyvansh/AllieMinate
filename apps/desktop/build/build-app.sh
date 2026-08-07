@@ -85,40 +85,6 @@ rsync -aL \
   --exclude '@alliminate/desktop' \
   "$ROOT/node_modules/" "$APP_RES/backend/node_modules/"
 
-# --- restore preserved runtime state (see backup step above) — everything from the previously-installed
-# app's backend dir wins outright (folders.json, accounts.json, photos-accounts.json, cache/, etc);
-# .env is merged so runtime-written tokens survive but new keys added to the source .env still come through. ---
-if [ -d "$PRESERVE_DIR/backend" ]; then
-  cp -R "$PRESERVE_DIR/backend/." "$APP_RES/backend/"
-fi
-
-# --- shared secrets, same relative depth backend/config.ts expects (Resources/backend/dist/../../../.env == Contents/.env) ---
-if [ -f "$PRESERVE_DIR/.env" ]; then
-  node -e '
-    const fs = require("fs");
-    function parse(text) {
-      const out = new Map();
-      for (const line of text.split("\n")) {
-        const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
-        if (m) out.set(m[1], m[2]);
-      }
-      return out;
-    }
-    const sourceText = fs.readFileSync(process.argv[1], "utf-8");
-    const runtime = parse(fs.readFileSync(process.argv[2], "utf-8"));
-    const merged = sourceText.split("\n").map((line) => {
-      const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
-      if (!m) return line;
-      const [, key] = m;
-      const runtimeVal = runtime.get(key);
-      return runtimeVal ? `${key}=${runtimeVal}` : line;
-    }).join("\n");
-    fs.writeFileSync(process.argv[3], merged);
-  ' "$ROOT/.env" "$PRESERVE_DIR/.env" "$BUILD_APP/Contents/.env"
-else
-  cp "$ROOT/.env" "$BUILD_APP/Contents/.env"
-fi
-
 # --- icon + Info.plist ---
 cp "$DESKTOP/build/AllieMinate.icns" "$APP_RES/AllieMinate.icns"
 
@@ -127,6 +93,18 @@ cp "$DESKTOP/build/AllieMinate.icns" "$APP_RES/AllieMinate.icns"
 /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.alliminate.app" "$BUILD_APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AllieMinate.icns" "$BUILD_APP/Contents/Info.plist"
 
+# $BUILD_APP is PRISTINE at this point — no accounts, no device identity, no cloud credentials, nothing
+# any previous install ever wrote. That's deliberate: this exact bundle is what both the .dmg AND (after
+# this section) the personalized dev install get built from, and the .dmg copy is taken further down
+# BEFORE any personal state gets restored into it. A prior version of this script restored preserved
+# state (accounts.json, device.json, username.json, the real .env with live OAuth refresh tokens for
+# every connected provider — everything) into $BUILD_APP and THEN copied that same personalized bundle
+# into the .dmg, meaning every .dmg this script built after the first run shipped the developer's own
+# Google Drive/MEGA/etc credentials and identity to whoever installed it. Ship blank .env.example
+# placeholders here — config.ts already runs fine with everything empty (README's own "fresh clone" setup
+# path is exactly this: cp .env.example .env, fill in only what you want).
+cp "$ROOT/.env.example" "$BUILD_APP/Contents/.env"
+
 echo "== code signing (ad-hoc) =="
 # node_modules copied via cp -RL can pick up resource-fork/FinderInfo extended attrs (esp. from
 # node-gyp-built native deps) that make codesign fail with "resource fork, Finder information,
@@ -134,16 +112,11 @@ echo "== code signing (ad-hoc) =="
 xattr -cr "$BUILD_APP"
 codesign --force --deep --sign - "$BUILD_APP"
 
-echo "== installing to $INSTALL_DIR =="
-mkdir -p "$INSTALL_DIR"
-rm -rf "$INSTALL_DIR/$APP_NAME.app"
-cp -R "$BUILD_APP" "$INSTALL_DIR/$APP_NAME.app"
-
-# --- distributable .dmg — a real double-click-and-drag-to-Applications installer, built from the same
-# freshly-assembled $BUILD_APP the dev install above uses (still valid here, before the EXIT trap wipes
-# the staging dir). Runs from a copy in its own empty source folder — create-dmg (and the Finder-scripting
-# it does under the hood) gets confused if anything besides the .app and the Applications symlink it adds
-# itself is sitting in the source dir. ---
+# --- distributable .dmg — a real double-click-and-drag-to-Applications installer, built from the PRISTINE
+# signed $BUILD_APP above, copied to its own empty source folder BEFORE any personal state gets restored
+# into $BUILD_APP for the dev install further down. create-dmg (and the Finder-scripting it does under the
+# hood) gets confused if anything besides the .app and the Applications symlink it adds itself is sitting
+# in the source dir. ---
 echo "== building AllieMinate.dmg =="
 DMG_SRC="$BUILD_STAGING/dmg-src"
 mkdir -p "$DMG_SRC"
@@ -196,7 +169,51 @@ create-dmg \
 if [ -f "$DMG_OUT" ]; then
   echo "done: $DMG_OUT"
 else
-  echo "!! .dmg build failed — dev install above still succeeded, see output for the actual error"
+  echo "!! .dmg build failed — see output for the actual error (dev install below is unaffected)"
 fi
+
+# --- personalize $BUILD_APP for the LOCAL dev install only, now that the pristine .dmg copy is already
+# safely taken above — restore preserved state (accounts.json, device.json, username.json, folders.json,
+# cache/, etc — everything from the previously-installed app's own backend dir) and the real .env with
+# live OAuth tokens. Re-signs afterward since the bundle's contents just changed post-signature. ---
+echo "== personalizing dev install =="
+if [ -d "$PRESERVE_DIR/backend" ]; then
+  cp -R "$PRESERVE_DIR/backend/." "$APP_RES/backend/"
+fi
+
+# same relative depth backend/config.ts expects (Resources/backend/dist/../../../.env == Contents/.env)
+if [ -f "$PRESERVE_DIR/.env" ]; then
+  node -e '
+    const fs = require("fs");
+    function parse(text) {
+      const out = new Map();
+      for (const line of text.split("\n")) {
+        const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+        if (m) out.set(m[1], m[2]);
+      }
+      return out;
+    }
+    const sourceText = fs.readFileSync(process.argv[1], "utf-8");
+    const runtime = parse(fs.readFileSync(process.argv[2], "utf-8"));
+    const merged = sourceText.split("\n").map((line) => {
+      const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+      if (!m) return line;
+      const [, key] = m;
+      const runtimeVal = runtime.get(key);
+      return runtimeVal ? `${key}=${runtimeVal}` : line;
+    }).join("\n");
+    fs.writeFileSync(process.argv[3], merged);
+  ' "$ROOT/.env" "$PRESERVE_DIR/.env" "$BUILD_APP/Contents/.env"
+else
+  cp "$ROOT/.env" "$BUILD_APP/Contents/.env"
+fi
+
+xattr -cr "$BUILD_APP"
+codesign --force --deep --sign - "$BUILD_APP"
+
+echo "== installing to $INSTALL_DIR =="
+mkdir -p "$INSTALL_DIR"
+rm -rf "$INSTALL_DIR/$APP_NAME.app"
+cp -R "$BUILD_APP" "$INSTALL_DIR/$APP_NAME.app"
 
 echo "done: $INSTALL_DIR/$APP_NAME.app"
