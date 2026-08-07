@@ -8,6 +8,7 @@
     "dev": "tsc -p tsconfig.json --watch",
     "build": "tsc -p tsconfig.json",
     "build:renderer": "esbuild src/renderer/index.tsx --bundle --outfile=src/renderer/bundle.js --loader:.tsx=tsx --loader:.png=dataurl --jsx=automatic && esbuild src/renderer/trayPanelIndex.tsx --bundle --outfile=src/renderer/trayPanel-bundle.js --loader:.tsx=tsx --loader:.png=dataurl --jsx=automatic",
+    "prestart": "npm run build --workspace=@alliminate/shared && npm run build --workspace=@alliminate/backend && npm run build && npm run build:renderer",
     "start": "electron ."
   },
   "dependencies": {

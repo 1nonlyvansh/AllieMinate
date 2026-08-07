@@ -67,7 +67,23 @@ mkdir -p "$APP_RES/backend"
 cp -R "$BACKEND/dist" "$APP_RES/backend/dist"
 cp "$BACKEND/folders.json" "$APP_RES/backend/folders.json"
 echo "== copying node_modules (this takes a bit) =="
-cp -RL "$ROOT/node_modules" "$APP_RES/backend/node_modules"
+# excludes packages the backend (a plain Node child process, no Electron API access — see spawnBackend)
+# never actually imports: electron itself (245MB — the backend runs under Electron's bundled Node via
+# child_process, it doesn't need its OWN copy of the whole Electron.app framework sitting in
+# node_modules/electron/dist) plus pure build-time tooling (typescript/esbuild/@types, ~35MB, nothing but
+# .ts source and dev scripts ever reference them, and dist/ is already-compiled plain .js). This was the
+# single biggest contributor to a 2GB+ DMG — cutting it roughly in half — which in turn was the real cause
+# behind an hour-plus install time on a fresh Mac: macOS's Gatekeeper quarantine scan runs across every
+# file in a freshly-downloaded, unnotarized .app on first copy, so a smaller bundle is a faster install,
+# not just a smaller download.
+rsync -aL \
+  --exclude 'electron' \
+  --exclude 'typescript' \
+  --exclude 'esbuild' \
+  --exclude '@esbuild' \
+  --exclude '@types' \
+  --exclude '@alliminate/desktop' \
+  "$ROOT/node_modules/" "$APP_RES/backend/node_modules/"
 
 # --- restore preserved runtime state (see backup step above) — everything from the previously-installed
 # app's backend dir wins outright (folders.json, accounts.json, photos-accounts.json, cache/, etc);
@@ -132,6 +148,35 @@ echo "== building AllieMinate.dmg =="
 DMG_SRC="$BUILD_STAGING/dmg-src"
 mkdir -p "$DMG_SRC"
 cp -R "$BUILD_APP" "$DMG_SRC/$APP_NAME.app"
+
+# Not notarized (no paid Apple Developer cert) — the FIRST launch on any Mac other than the one that built
+# it gets Gatekeeper's "AllieMinate Not Opened" block, and clicking "Done" on that dialog just dismisses it
+# without granting the exception, leaving the app permanently unopenable with no further prompt. This was
+# already documented in the README, which nobody installing FROM a .dmg a friend sent them is ever going to
+# go read — so it's a plain text file sitting right next to the app in the .dmg itself instead. Explicitly
+# positioned (see the --icon flag below) since create-dmg's Finder-layout AppleScript only reliably arranges
+# icons it's told about; an unpositioned stray file in the source folder is what causes the "Finder layout
+# race" create-dmg sometimes exits non-zero on.
+cat > "$DMG_SRC/If AllieMinate Won't Open.txt" << 'EOF'
+AllieMinate isn't notarized with a paid Apple Developer certificate, so macOS
+Gatekeeper blocks the very first launch with a warning ("Apple could not
+verify..."). This is normal for a free, independently-built app — it does NOT
+mean anything is wrong with it.
+
+Clicking "Done" on that warning does NOT open the app. Do this instead:
+
+  1. Open System Settings -> Privacy & Security.
+  2. Scroll down to the Security section — you'll see a line about
+     "AllieMinate was blocked."
+  3. Click "Open Anyway", then confirm in the popup that appears.
+
+(Or: right-click AllieMinate.app in Applications -> Open -> Open, BEFORE
+ever double-clicking it the normal way — this only works if it's the very
+first launch attempt.)
+
+You only need to do this once.
+EOF
+
 DMG_OUT="$DESKTOP/build/$APP_NAME.dmg"
 rm -f "$DMG_OUT"
 create-dmg \
@@ -141,6 +186,7 @@ create-dmg \
   --window-size 660 400 \
   --icon-size 100 \
   --icon "$APP_NAME.app" 180 170 \
+  --icon "If AllieMinate Won't Open.txt" 330 280 \
   --hide-extension "$APP_NAME.app" \
   --app-drop-link 480 170 \
   --no-internet-enable \
