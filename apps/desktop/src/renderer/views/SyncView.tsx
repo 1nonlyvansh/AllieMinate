@@ -1,16 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import type { ProviderStorage } from '@alliminate/shared';
+import type { ProviderStorage, UniversalSyncInvite } from '@alliminate/shared';
 import { baseProviderOf } from '@alliminate/shared';
 import type { ActivityEntry, SyncPair, PairedDeviceInfo } from '../lib/types';
 import { CLOUD_ICONS } from '../lib/cloudIcons';
 import { formatBytes, timeAgo } from '../lib/format';
 import { AddSyncPairModal } from '../components/AddSyncPairModal';
+import { CreateUniversalSyncModal } from '../components/CreateUniversalSyncModal';
+import { UniversalSyncInviteModal } from '../components/UniversalSyncInviteModal';
+import { SyncPairFileBrowser } from '../components/SyncPairFileBrowser';
 import { Modal } from '../components/Modal';
 import { DropdownMenu } from '../components/DropdownMenu';
 import { NearbyPickerModal } from '../components/NearbyPickerModal';
 import { SendableFile } from '../lib/sendActions';
 import { IconSync, IconAdd, IconTrash, IconPhone, IconChevronLeft, IconFiles, IconDevices } from '../icons';
 import { deviceNounLower, fileBrowserName } from '../lib/platformLabels';
+
+const INVITE_POLL_MS = 15000;
 
 const API_BASE = 'http://localhost:4310';
 
@@ -371,10 +376,30 @@ export function SyncView({
   const [pairs, setPairs] = useState<PairWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [showUniversalSync, setShowUniversalSync] = useState(false);
+  const [pendingInvites, setPendingInvites] = useState<UniversalSyncInvite[]>([]);
+  const [respondingInvite, setRespondingInvite] = useState<UniversalSyncInvite | null>(null);
+  const [browsingPair, setBrowsingPair] = useState<PairWithStatus | null>(null);
   const [rules, setRules] = useState<string[]>([]);
   const [newRule, setNewRule] = useState('');
   const [savingRules, setSavingRules] = useState(false);
   const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
+
+  // covers invites that arrived while this device was offline/closed — a live push while the app is open
+  // would be nicer, but a Universal Sync invite (unlike an ephemeral nearby-transfer offer) doesn't expire
+  // in seconds, so polling on a plain interval whenever the Sync tab is open is a fine trade for not
+  // threading a new global WS event type through App.tsx just for this.
+  useEffect(() => {
+    function loadInvites() {
+      fetch(`${API_BASE}/universal-sync/invites`)
+        .then((res) => res.json())
+        .then((data) => setPendingInvites(data.invites ?? []))
+        .catch(() => {});
+    }
+    loadInvites();
+    const interval = setInterval(loadInvites, INVITE_POLL_MS);
+    return () => clearInterval(interval);
+  }, []);
 
   async function refresh() {
     try {
@@ -474,10 +499,29 @@ export function SyncView({
           <h1>Sync</h1>
           <div className="subtitle">Sync any folder on {deviceNounLower} to a cloud account, in the background</div>
         </div>
-        <button className="btn primary" onClick={() => setShowAdd(true)}>
-          <IconAdd size={14} /> Add Sync Pair
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={() => setShowUniversalSync(true)}>
+            <IconAdd size={14} /> Create a Universal Sync
+          </button>
+          <button className="btn primary" onClick={() => setShowAdd(true)}>
+            <IconAdd size={14} /> Add Sync Pair
+          </button>
+        </div>
       </div>
+
+      {pendingInvites.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+          {pendingInvites.map((invite) => (
+            <div key={invite.id} className="glass-card" style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <IconSync size={18} />
+              <div style={{ flex: 1, fontSize: 13 }}>
+                <b>{invite.hostDeviceName}</b> wants to share <b>"{invite.name}"</b> with this device
+              </div>
+              <button className="btn small primary" onClick={() => setRespondingInvite(invite)}>Review</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {loading && <div className="empty-state">Loading…</div>}
 
@@ -558,6 +602,7 @@ export function SyncView({
                 )}
               </div>
               <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <button className="btn small" onClick={() => setBrowsingPair(p)}>Browse Files</button>
                 <button className="btn small" onClick={() => window.alliminate.openFolder(p.localPath)}>Open Folder in {fileBrowserName}</button>
                 {p.status === 'active' && !p.paused && (
                   <button className="btn small" onClick={() => pause(p.id)}>Pause</button>
@@ -632,6 +677,29 @@ export function SyncView({
           onClose={() => setShowAdd(false)}
           onCreated={refresh}
         />
+      )}
+
+      {showUniversalSync && (
+        <CreateUniversalSyncModal
+          storage={storage}
+          onClose={() => setShowUniversalSync(false)}
+          onCreated={refresh}
+        />
+      )}
+
+      {respondingInvite && (
+        <UniversalSyncInviteModal
+          invite={respondingInvite}
+          onClose={() => setRespondingInvite(null)}
+          onResolved={() => {
+            setPendingInvites((prev) => prev.filter((i) => i.id !== respondingInvite.id));
+            refresh();
+          }}
+        />
+      )}
+
+      {browsingPair && (
+        <SyncPairFileBrowser pair={browsingPair} onClose={() => setBrowsingPair(null)} onChanged={refresh} />
       )}
     </section>
   );

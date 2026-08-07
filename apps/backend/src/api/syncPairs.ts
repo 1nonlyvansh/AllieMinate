@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import crypto from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { StorageBackend } from '../storage/StorageBackend';
@@ -7,6 +8,18 @@ import { startSyncPair, stopSyncPairWatch, isSyncPaused, pauseAutoSyncForFolder,
 import { loadSyncState, deleteSyncState } from '../sync/syncState';
 import { getSyncProgress } from '../sync/twoWaySync';
 import { getDeviceIdentity } from '../device';
+import { categoryForFile, loadOpenWithPrefs } from '../openWith';
+import { openLocalFile } from '../openLauncher';
+
+// every file-level route below operates on a plain local path (a Sync Pair's files already live on this
+// device's disk — unlike a cloud folder or a peer's folder, there's no download/proxy step needed, just
+// containment-checked filesystem access, same caution isAllowedLocalFolderPath already uses elsewhere).
+function resolvePairFile(localPath: string, key: string): string | null {
+  const resolved = path.resolve(localPath, key);
+  const root = path.resolve(localPath);
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) return null;
+  return resolved;
+}
 
 // Sync Engine (Phase 3/4): freestanding Sync Pairs — pick any local folder first, then choose which
 // account it syncs to. Distinct from the pinned-folder Auto-Sync toggle (providers.ts), which upgrades a
@@ -36,12 +49,79 @@ export function registerSyncPairRoutes(app: FastifyInstance, backends: Map<strin
     return { files: Object.entries(state).map(([relPath, record]) => ({ relPath, ...record })) };
   });
 
+  app.get<{ Params: { id: string }; Querystring: { key: string } }>('/sync/pairs/:id/download', async (req, reply) => {
+    const pair = getSyncPair(req.params.id);
+    if (!pair) return reply.code(404).send({ error: 'sync pair not found' });
+    const filePath = resolvePairFile(pair.localPath, req.query.key);
+    if (!filePath) return reply.code(403).send({ error: 'path not allowed' });
+    try {
+      const data = await fs.promises.readFile(filePath);
+      reply.header('Content-Type', 'application/octet-stream');
+      return reply.send(data);
+    } catch {
+      return reply.code(404).send({ error: 'file not found' });
+    }
+  });
+
+  // opens with a specific app (from Settings > Default Apps) or the OS default — same
+  // categoryForFile/loadOpenWithPrefs/openLocalFile trio devices.ts already uses for every other
+  // "Open in App" action in the codebase.
+  app.post<{ Params: { id: string }; Body: { key: string; mimeType?: string } }>('/sync/pairs/:id/open', async (req, reply) => {
+    const pair = getSyncPair(req.params.id);
+    if (!pair) return reply.code(404).send({ error: 'sync pair not found' });
+    const filePath = resolvePairFile(pair.localPath, req.body.key);
+    if (!filePath) return reply.code(403).send({ error: 'path not allowed' });
+    const name = req.body.key.split('/').pop() ?? req.body.key;
+    const category = categoryForFile(name, req.body.mimeType);
+    const appPath = category ? loadOpenWithPrefs()[category] : undefined;
+    openLocalFile(filePath, appPath, (err) => app.log.error(err, 'failed to open sync pair file'));
+    return { ok: true };
+  });
+
+  app.delete<{ Params: { id: string }; Querystring: { key: string } }>('/sync/pairs/:id/file', async (req, reply) => {
+    const pair = getSyncPair(req.params.id);
+    if (!pair) return reply.code(404).send({ error: 'sync pair not found' });
+    const filePath = resolvePairFile(pair.localPath, req.query.key);
+    if (!filePath) return reply.code(403).send({ error: 'path not allowed' });
+    try {
+      // a plain unlink — the live chokidar watcher already running for this pair (see engine.ts's
+      // syncFolderEvent) picks this up itself and propagates the delete to the cloud and every other
+      // granted device on its own, exactly like any other local delete in the synced folder would.
+      // "Permanently" here means skipping any provider-side Trash/soft-delete, which propagation already
+      // does today for a two-way pair — no separate hard-delete plumbing needed.
+      await fs.promises.unlink(filePath);
+      return { ok: true };
+    } catch {
+      return reply.code(404).send({ error: 'file not found' });
+    }
+  });
+
+  app.patch<{ Params: { id: string }; Querystring: { key: string; newName: string } }>('/sync/pairs/:id/file', async (req, reply) => {
+    const pair = getSyncPair(req.params.id);
+    if (!pair) return reply.code(404).send({ error: 'sync pair not found' });
+    const { key, newName } = req.query;
+    if (!key || !newName || newName.includes('/') || newName.includes('\\')) return reply.code(400).send({ error: 'invalid name' });
+    const oldPath = resolvePairFile(pair.localPath, key);
+    const newPath = oldPath && resolvePairFile(pair.localPath, path.posix.join(path.posix.dirname(key), newName));
+    if (!oldPath || !newPath) return reply.code(403).send({ error: 'path not allowed' });
+    try {
+      await fs.promises.rename(oldPath, newPath);
+      return { ok: true };
+    } catch {
+      return reply.code(404).send({ error: 'file not found' });
+    }
+  });
+
   app.post<{
     Body: {
       name: string;
       localPath: string;
       direction?: 'two-way' | 'backup-only' | 'download-only';
       createInCloud?: boolean;
+      // when set, localPath is created on disk (recursive mkdir) instead of being required to already
+      // exist — the Universal Sync Folder wizard's "New Folder" branch uses this so the user can name a
+      // folder in-app rather than through the native picker's own "New Folder" button.
+      createNew?: boolean;
       // cloud target
       providerId?: string;
       // device target — remoteFolderKind picks which of the peer's folder namespaces remoteFolderId is
@@ -52,10 +132,12 @@ export function registerSyncPairRoutes(app: FastifyInstance, backends: Map<strin
       remoteFolderKind?: 'folder' | 'local-folder';
     };
   }>('/sync/pairs', async (req, reply) => {
-    const { name, localPath, providerId, direction, createInCloud, deviceId, remoteFolderId, remoteFolderKind } = req.body;
+    const { name, localPath, providerId, direction, createInCloud, createNew, deviceId, remoteFolderId, remoteFolderKind } = req.body;
     if (!name?.trim()) return reply.code(400).send({ error: 'missing name' });
     if (!localPath?.trim()) return reply.code(400).send({ error: 'missing local folder' });
-    if (!fs.existsSync(localPath) || !fs.statSync(localPath).isDirectory()) {
+    if (createNew) {
+      fs.mkdirSync(localPath, { recursive: true });
+    } else if (!fs.existsSync(localPath) || !fs.statSync(localPath).isDirectory()) {
       return reply.code(400).send({ error: 'local folder does not exist' });
     }
 

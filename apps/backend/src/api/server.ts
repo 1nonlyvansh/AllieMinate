@@ -16,6 +16,7 @@ import { registerPhotosRoutes } from './photos';
 import { registerSettingsRoutes } from './settings';
 import { registerLogRoutes } from './logs';
 import { registerSyncPairRoutes } from './syncPairs';
+import { registerUniversalSyncRoutes } from './universalSync';
 import { registerLocalFolderRoutes } from './localFolders';
 import { findByToken } from '../pairing';
 import { loadMasterDeviceEnabled } from '../masterDevice';
@@ -175,6 +176,7 @@ export async function buildServer(
   registerSettingsRoutes(app);
   registerLogRoutes(app);
   registerSyncPairRoutes(app, backends);
+  registerUniversalSyncRoutes(app, backends);
   registerLocalFolderRoutes(app);
 
   app.get('/status', async () => ({

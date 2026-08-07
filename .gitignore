@@ -35,6 +35,8 @@ apps/backend/sync/bandwidthLimit.json
 apps/backend/syncIgnoreRules.json
 apps/backend/syncPairs.json
 apps/backend/syncTrash/
+apps/backend/universalSyncInvites.json
+apps/backend/universalSyncPending.json
 apps/backend/syncState/
 apps/backend/local-folder-shortcuts.json
 
