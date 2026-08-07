@@ -582,8 +582,6 @@ export function TrayPanel(): JSX.Element {
   return (
     <div
       className="tray-panel"
-      onMouseEnter={() => window.alliminate.keepPanelOpen()}
-      onMouseLeave={() => window.alliminate.notifyPanelHoverLeave()}
       onDragEnter={(e) => {
         e.preventDefault();
         setDropError(null);

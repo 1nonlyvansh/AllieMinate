@@ -208,6 +208,10 @@ function createPanel(): BrowserWindow {
   injectThemeCss(win, 'mac/glass.css');
   win.loadFile(path.join(__dirname, '../../src/renderer/trayPanel.html'));
 
+  // click-to-open (not hover) means this panel is shown via a real show()+focus() from a deliberate user
+  // action, not showInactive() — so unlike the old hover experiment, there's no spurious-blur-right-after-
+  // show quirk to worry about here, and closing on blur (click elsewhere) is exactly the expected flyout
+  // convention. Never hides mid-drop, so a drag that briefly takes focus elsewhere doesn't abort it.
   win.on('blur', () => {
     if (!pendingDropFiles) win.hide();
   });
@@ -222,7 +226,7 @@ const PANEL_HEIGHT = 480;
 // any of the four screen edges — so instead of assuming an edge, diff the display's full bounds against
 // its workArea to find which side is actually occluded by the taskbar/menu bar, then place the panel on
 // the opposite side of the tray icon from that edge, clamped within the visible work area on both axes.
-function positionPanelNearTray(win: BrowserWindow): void {
+function positionPanelNearTray(win: BrowserWindow, width = PANEL_WIDTH, height = PANEL_HEIGHT): void {
   if (!tray) return;
   const trayBounds = tray.getBounds();
   const { bounds, workArea } = screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y });
@@ -242,42 +246,44 @@ function positionPanelNearTray(win: BrowserWindow): void {
   let y: number;
   if (maxGap === leftGap && leftGap > 0) {
     x = trayBounds.x + trayBounds.width + gap;
-    y = Math.round(trayBounds.y + trayBounds.height / 2 - PANEL_HEIGHT / 2);
+    y = Math.round(trayBounds.y + trayBounds.height / 2 - height / 2);
   } else if (maxGap === rightGap && rightGap > 0) {
-    x = trayBounds.x - PANEL_WIDTH - gap;
-    y = Math.round(trayBounds.y + trayBounds.height / 2 - PANEL_HEIGHT / 2);
+    x = trayBounds.x - width - gap;
+    y = Math.round(trayBounds.y + trayBounds.height / 2 - height / 2);
   } else if (maxGap === bottomGap && bottomGap > 0) {
-    x = Math.round(trayBounds.x + trayBounds.width / 2 - PANEL_WIDTH / 2);
-    y = trayBounds.y - PANEL_HEIGHT - gap;
+    x = Math.round(trayBounds.x + trayBounds.width / 2 - width / 2);
+    y = trayBounds.y - height - gap;
   } else {
     // top taskbar/menu bar (macOS default) or no edge detected — panel appears below the icon
-    x = Math.round(trayBounds.x + trayBounds.width / 2 - PANEL_WIDTH / 2);
+    x = Math.round(trayBounds.x + trayBounds.width / 2 - width / 2);
     y = trayBounds.y + trayBounds.height + gap;
   }
 
-  x = Math.max(workArea.x + 8, Math.min(x, workArea.x + workArea.width - PANEL_WIDTH - 8));
-  y = Math.max(workArea.y + 8, Math.min(y, workArea.y + workArea.height - PANEL_HEIGHT - 8));
+  x = Math.max(workArea.x + 8, Math.min(x, workArea.x + workArea.width - width - 8));
+  y = Math.max(workArea.y + 8, Math.min(y, workArea.y + workArea.height - height - 8));
 
   win.setPosition(Math.round(x), Math.round(y), false);
 }
 
-// hover shows the panel as a preview (no OS focus stolen — showInactive), independent of the drag/drop
-// flow's own show/hide calls. Reuses the same dragLeaveTimer/scheduleHideDropPanel grace-period pair the
-// drag flow already relies on (renderer sends 'tray:keepPanelOpen' on entering the panel content, and a
-// new 'tray:panelHoverLeave' on leaving it) rather than polling cursor position against tray/panel bounds
-// — a poll-based approach is fooled by Windows display-scaling mismatches between screen.getCursorScreenPoint()
-// and Tray.getBounds(), which is exactly what made the panel flash and vanish on the first hover attempt.
-function showPanelOnHover(): void {
+// click opens the recent-files panel (no more hover-to-preview) — a real show()+focus() since this is a
+// deliberate user action, closed by the createPanel() blur handler once the user clicks elsewhere, or by
+// clicking the tray icon again to toggle it shut.
+function toggleRecentPanel(): void {
   if (!tray) return;
   if (!panel || panel.isDestroyed()) panel = createPanel();
-  positionPanelNearTray(panel);
-  if (!panel.isVisible()) {
-    panel.showInactive();
-    // plain reload() can still serve the JS bundle and any GET responses from Chromium's HTTP cache — this
-    // panel needs to reflect settings the user may have JUST changed (Menu Bar Icon Settings' cloud filter,
-    // for one), so a normal reload isn't enough; force a real re-fetch of everything, bundle included.
-    panel.webContents.reloadIgnoringCache();
+
+  if (panel.isVisible()) {
+    panel.hide();
+    return;
   }
+
+  positionPanelNearTray(panel);
+  panel.show();
+  panel.focus();
+  // plain reload() can still serve the JS bundle and any GET responses from Chromium's HTTP cache — this
+  // panel needs to reflect settings the user may have JUST changed (Menu Bar Icon Settings' cloud filter,
+  // for one), so a normal reload isn't enough; force a real re-fetch of everything, bundle included.
+  panel.webContents.reloadIgnoringCache();
 }
 
 function clearDragLeaveTimer(): void {
@@ -304,6 +310,56 @@ function scheduleHideDropPanel(): void {
     dragLeaveTimer = null;
     if (!pendingDropFiles && panel && !panel.isDestroyed()) panel.hide();
   }, 200);
+}
+
+// --- Windows drag-and-drop onto the tray icon ---
+// Electron's Tray only emits 'drag-enter'/'drag-leave'/'drop-files' on macOS — on Windows there is no
+// event at all for "a file is being dragged near the tray icon," because the tray icon isn't an Electron
+// window, it's drawn by the shell (explorer.exe); Electron has no hook into that. The standard, and really
+// only Electron-feasible, workaround: a real, always-present BrowserWindow sitting at the icon's edge IS a
+// valid native OS drop target (plain HTML5 dragenter/drop, no different from any webpage) — Windows' OLE
+// drag-drop delivery is keyed off which window is actually at that screen position, not whether Electron's
+// Tray API knows anything about it. This sensor window is deliberately separate from the real panel
+// (rather than keeping the panel itself always-shown) so none of the just-fixed hover/debounce behavior
+// is at risk of regressing — the sensor's only job is to notice a drag starting and hand off to the
+// existing showDropPanel()/scheduleHideDropPanel() flow, exactly mirroring what tray.on('drag-enter'/
+// 'drag-leave') already does natively on macOS. Kept small (not full panel size) since it only needs to be
+// a believable target near the icon, not the actual drop-target UI — the real panel takes over for that.
+const SENSOR_SIZE = 72;
+let dropSensor: BrowserWindow | null = null;
+
+function createDropSensor(): BrowserWindow {
+  const preload = path.join(__dirname, '../preload/index.js');
+  const win = new BrowserWindow({
+    width: SENSOR_SIZE,
+    height: SENSOR_SIZE,
+    show: false,
+    frame: false,
+    resizable: false,
+    movable: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    alwaysOnTop: true,
+    fullscreenable: false,
+    skipTaskbar: true,
+    hasShadow: false,
+    focusable: false, // present as a drop target without ever competing for focus/clicks with anything nearby
+    webPreferences: { preload, contextIsolation: true, nodeIntegration: false },
+  });
+  win.setAlwaysOnTop(true, 'floating');
+  win.setIgnoreMouseEvents(false); // must stay hit-testable — click-through windows are excluded from OS drag-drop delivery too
+  win.loadFile(path.join(__dirname, '../../src/renderer/dropSensor.html'));
+  return win;
+}
+
+// created once and kept alive for the app's whole life on Windows (never hidden/destroyed) — a hidden
+// BrowserWindow has no OS presence at all and would catch nothing, so unlike the hover panel this window
+// has to just always be there, positioned at whatever the tray icon's current edge is.
+function ensureDropSensor(): void {
+  if (process.platform !== 'win32' || !tray) return;
+  if (!dropSensor || dropSensor.isDestroyed()) dropSensor = createDropSensor();
+  positionPanelNearTray(dropSensor, SENSOR_SIZE, SENSOR_SIZE);
+  if (!dropSensor.isVisible()) dropSensor.showInactive();
 }
 
 function handleFilesDropped(filePaths: string[], kind: 'cloud' | 'device' | 'nearby' | 'both' = 'both'): void {
@@ -372,6 +428,18 @@ export function createTray(): void {
   if (process.platform === 'win32') icon = icon.resize({ width: 16, height: 16 });
   tray = new Tray(icon);
   tray.setToolTip('AllieMinate');
+  ensureDropSensor();
+
+  // the sensor (Windows only — see createDropSensor's comment) noticed a real OS drag entering its
+  // bounds near the tray icon; hand off to the exact same flow macOS's native tray.on('drag-enter'/
+  // 'drag-leave') already drives below, so both platforms end up at the identical drop-target UI.
+  ipcMain.handle('tray:sensorDragEnter', () => {
+    pendingDropKind = 'both';
+    showDropPanel();
+  });
+  ipcMain.handle('tray:sensorDragLeave', () => {
+    scheduleHideDropPanel();
+  });
 
   ipcMain.handle('tray:openApp', (_e, target?: string) => {
     panel?.hide();
@@ -400,15 +468,10 @@ export function createTray(): void {
     cancelDrop();
   });
 
-  // the panel content reports its own hover state so we don't auto-hide while the cursor is over it, not
-  // just over the tiny tray icon — shared by the drag flow (matches O+ Connect's drop-anywhere-in-the-panel
-  // behavior) and by plain mouse hover, since both just mean "the user is still interacting with this".
+  // the panel content reports drag-hover so we don't auto-hide it while a file's being dragged over it,
+  // not just while it's over the tiny tray icon — matches O+ Connect's drop-anywhere-in-the-panel behavior.
   ipcMain.handle('tray:keepPanelOpen', () => {
     clearDragLeaveTimer();
-  });
-
-  ipcMain.handle('tray:panelHoverLeave', () => {
-    scheduleHideDropPanel();
   });
 
   ipcMain.handle('tray:filesDroppedInPanel', (_e, filePaths: string[], kind?: 'cloud' | 'device' | 'nearby') => {
@@ -461,19 +524,10 @@ export function createTray(): void {
 
   // hovering previews the panel (recent files, quick actions); clicking opens the full app window instead
   // of toggling the panel — the panel is a glanceable preview, not the click target.
-  tray.on('mouse-enter', () => {
-    clearDragLeaveTimer();
-    showPanelOnHover();
-  });
-
-  tray.on('mouse-leave', () => {
-    scheduleHideDropPanel();
-  });
-
+  // click opens/closes the recent-files panel — it no longer opens the main app window. Use the tray's
+  // right-click menu's "Open AllieMinate" for that instead.
   tray.on('click', () => {
-    panel?.hide();
-    clearDragLeaveTimer();
-    showMainWindow();
+    toggleRecentPanel();
   });
 
   // Windows convention: right-click shows a context menu (there's no Dock/Cmd+Q route to quit on

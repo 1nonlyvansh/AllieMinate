@@ -10,7 +10,6 @@ declare global {
       cancelDrop: () => Promise<void>;
       keepPanelOpen: () => Promise<void>;
       notifyPanelDragLeave: () => Promise<void>;
-      notifyPanelHoverLeave: () => Promise<void>;
       dropFilesInPanel: (filePaths: string[], kind?: 'cloud' | 'device' | 'nearby') => Promise<void>;
       switchDropKind: (kind: 'cloud' | 'device') => Promise<void>;
       copyFile: (url: string, filename: string) => Promise<{ ok: boolean; error?: string }>;
@@ -23,6 +22,8 @@ declare global {
       openExternal: (url: string) => Promise<void>;
       composeMailWithAttachments: (params: { to: string; subject: string; body: string; attachmentPaths: string[] }) => Promise<{ ok: boolean; error?: string }>;
       getPathForFile: (file: File) => string;
+      notifySensorDragEnter: () => Promise<void>;
+      notifySensorDragLeave: () => Promise<void>;
       onTrayState: (cb: (state: unknown) => void) => () => void;
     };
   }

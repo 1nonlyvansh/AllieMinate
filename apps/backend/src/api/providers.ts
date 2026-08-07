@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import http from 'node:http';
-import { execSync } from 'node:child_process';
 import { google } from 'googleapis';
+import { openExternalUrl } from '../openLauncher';
 import type { FolderConfig, StorageProviderId } from '@alliminate/shared';
 import type { StorageBackend } from '../storage/StorageBackend';
 import { S3CompatibleBackend } from '../storage/S3CompatibleBackend';
@@ -175,7 +175,7 @@ export function registerProviderRoutes(
 
     oauthServer.listen(OAUTH_PORT, () => {
       try {
-        execSync(`open "${authUrl}"`);
+        openExternalUrl(authUrl);
       } catch {
         // couldn't auto-open — the frontend still has the authUrl to show
       }
@@ -317,7 +317,7 @@ export function registerProviderRoutes(
 
     addAccountServer.listen(OAUTH_ADD_ACCOUNT_PORT, () => {
       try {
-        execSync(`open "${authUrl}"`);
+        openExternalUrl(authUrl);
       } catch {
         // couldn't auto-open — the frontend still has the authUrl to show
       }
@@ -395,7 +395,7 @@ export function registerProviderRoutes(
 
     pcloudServer.listen(PCLOUD_OAUTH_PORT, () => {
       try {
-        execSync(`open "${authUrl}"`);
+        openExternalUrl(authUrl);
       } catch {
         // couldn't auto-open — the frontend still has the authUrl to show
       }
@@ -486,7 +486,7 @@ export function registerProviderRoutes(
 
     onedriveServer.listen(ONEDRIVE_OAUTH_PORT, () => {
       try {
-        execSync(`open "${authUrl}"`);
+        openExternalUrl(authUrl);
       } catch {
         // couldn't auto-open — the frontend still has the authUrl to show
       }

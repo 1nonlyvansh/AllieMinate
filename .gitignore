@@ -8,6 +8,9 @@ dist/
 .env
 .env.local
 !.env.example
+# Google Cloud Console's default download name for OAuth Desktop-app credentials — lands in repo root
+# unless the user saves it elsewhere; catch it here too since it's a real client secret either way.
+client_secret_*.json
 
 # --- Backend runtime state — written at runtime into apps/backend/ by default (ALLIMINATE_DATA_DIR
 # overrides this), never source. Includes paired-device tokens, OAuth account records, and connection
@@ -31,7 +34,7 @@ apps/backend/username.json
 apps/backend/cache-settings.json
 apps/backend/cache/
 apps/backend/Users/
-apps/backend/sync/bandwidthLimit.json
+apps/backend/bandwidthLimit.json
 apps/backend/syncIgnoreRules.json
 apps/backend/syncPairs.json
 apps/backend/syncTrash/

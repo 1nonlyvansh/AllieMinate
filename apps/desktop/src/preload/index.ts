@@ -13,7 +13,6 @@ contextBridge.exposeInMainWorld('alliminate', {
   cancelDrop: (): Promise<void> => ipcRenderer.invoke('tray:cancelDrop'),
   keepPanelOpen: (): Promise<void> => ipcRenderer.invoke('tray:keepPanelOpen'),
   notifyPanelDragLeave: (): Promise<void> => ipcRenderer.invoke('tray:panelDragLeave'),
-  notifyPanelHoverLeave: (): Promise<void> => ipcRenderer.invoke('tray:panelHoverLeave'),
   dropFilesInPanel: (filePaths: string[], kind?: 'cloud' | 'device' | 'nearby'): Promise<void> =>
     ipcRenderer.invoke('tray:filesDroppedInPanel', filePaths, kind),
   switchDropKind: (kind: 'cloud' | 'device'): Promise<void> => ipcRenderer.invoke('tray:switchDropKind', kind),
@@ -29,6 +28,8 @@ contextBridge.exposeInMainWorld('alliminate', {
   composeMailWithAttachments: (params: { to: string; subject: string; body: string; attachmentPaths: string[] }): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('mail:composeWithAttachments', params),
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),
+  notifySensorDragEnter: (): Promise<void> => ipcRenderer.invoke('tray:sensorDragEnter'),
+  notifySensorDragLeave: (): Promise<void> => ipcRenderer.invoke('tray:sensorDragLeave'),
   onTrayState: (cb: (state: unknown) => void): (() => void) => {
     const listener = (_e: unknown, state: unknown) => cb(state);
     ipcRenderer.on('tray:state', listener);

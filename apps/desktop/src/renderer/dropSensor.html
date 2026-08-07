@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+      /* full-bleed drop target — invisible until a drag actually enters (see dragenter/dragleave below) */
+      #zone { width: 100%; height: 100%; -webkit-app-region: no-drag; }
+    </style>
+  </head>
+  <body>
+    <div id="zone"></div>
+    <script>
+      // Windows-only helper window (see tray.ts createDropSensor) — Electron's Tray has no drag-enter/
+      // drop-files events on Windows (macOS only), so there's nothing to catch a file drag hovering near
+      // the tray icon. A real, present BrowserWindow sitting at the icon's edge IS a valid OS drop target
+      // though (plain HTML5 dragenter/drop, same as any webpage) — this window exists purely to notice
+      // the drag starting, hand off to the real tray panel (which already has full drop-target UI) to
+      // take over, and catch the drop directly too as a fallback in case it lands here first.
+      const zone = document.getElementById('zone');
+
+      zone.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        window.alliminate.notifySensorDragEnter();
+      });
+      zone.addEventListener('dragover', (e) => e.preventDefault());
+      zone.addEventListener('dragleave', () => {
+        window.alliminate.notifySensorDragLeave();
+      });
+      zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const paths = Array.from(e.dataTransfer.files)
+          .map((f) => window.alliminate.getPathForFile(f))
+          .filter(Boolean);
+        if (paths.length > 0) window.alliminate.dropFilesInPanel(paths);
+      });
+    </script>
+  </body>
+</html>
