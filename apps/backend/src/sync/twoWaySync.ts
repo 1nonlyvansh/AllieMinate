@@ -10,6 +10,7 @@ import { trashLocalFile, trashRemoteBytes } from './syncTrash';
 import { emitSyncEvent } from '../events';
 import { maxFileSizeFor, estimateQuota, freeDiskSpace } from './syncSafety';
 import { throttle } from './bandwidthThrottle';
+import { getDeviceIdentity } from '../device';
 
 function assertFileSizeOk(folder: FolderConfig, size: number): void {
   const max = maxFileSizeFor(folder.provider);
@@ -543,7 +544,29 @@ export function recordLocalSync(folderId: string, relPath: string, size: number,
     delete state[relPath];
   } else {
     const existing = state[relPath];
-    state[relPath] = { ...existing, localSize: size, localModifiedAt: modifiedAt, localHash: hash, remoteSize: size, remoteModifiedAt: modifiedAt, remoteHash: hash, lastSyncedAt: new Date().toISOString(), status: 'synced', retryCount: undefined, nextRetryAt: undefined, lastError: undefined };
+    // provenance ("added by" in the Universal Sync Folder Details action) is set once, on the FIRST time
+    // this device ever sees this relPath — the spread below then preserves it on every later update
+    // (an edit doesn't change who originally added the file). A device that only ever PULLS a file down
+    // via reconciliation (never pushes it itself) has no way to know who really authored it, so this stays
+    // unset for those — Details shows "Unknown (synced from elsewhere)" rather than a guess.
+    const provenance = existing?.addedByDeviceId
+      ? {}
+      : { addedByDeviceId: getDeviceIdentity().id, addedByDeviceName: getDeviceIdentity().name, addedAt: new Date().toISOString() };
+    state[relPath] = {
+      ...existing,
+      ...provenance,
+      localSize: size,
+      localModifiedAt: modifiedAt,
+      localHash: hash,
+      remoteSize: size,
+      remoteModifiedAt: modifiedAt,
+      remoteHash: hash,
+      lastSyncedAt: new Date().toISOString(),
+      status: 'synced',
+      retryCount: undefined,
+      nextRetryAt: undefined,
+      lastError: undefined,
+    };
   }
   saveSyncState(folderId, state);
 }

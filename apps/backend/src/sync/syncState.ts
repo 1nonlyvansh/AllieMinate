@@ -29,6 +29,13 @@ export interface FileSyncRecord {
   retryCount?: number;
   nextRetryAt?: string;
   lastError?: string;
+  /** Which device actually put this file here, for the Details action's "added by" field — populated
+   * whenever THIS device pushes a genuinely new (not just modified) local file (see syncFolderEvent()),
+   * and backfilled for files this device only ever PULLED down by reading the manifest.ts sidecar (a
+   * device downloading a file from the cloud has no way to know who originally authored it otherwise). */
+  addedByDeviceId?: string;
+  addedByDeviceName?: string;
+  addedAt?: string;
 }
 
 export type FolderSyncState = Record<string, FileSyncRecord>; // keyed by path relative to the folder root

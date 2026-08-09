@@ -282,6 +282,23 @@ function toggleRecentPanel(): void {
   panel.webContents.reloadIgnoringCache();
 }
 
+// macOS convention (Bluetooth, WiFi, Dropbox, ...): clicking the menu bar icon toggles the panel directly
+// — there is no separate "open the full app" click target the way Windows' tray icon has one, since the
+// panel already reaches everything a quick glance needs. showInactive() elsewhere is deliberately NOT used
+// here; a real click should take focus like any other window activation.
+function toggleMacPanel(): void {
+  if (!tray) return;
+  if (!panel || panel.isDestroyed()) panel = createPanel();
+  if (panel.isVisible()) {
+    panel.hide();
+    return;
+  }
+  positionPanelNearTray(panel);
+  panel.show();
+  panel.focus();
+  panel.webContents.reloadIgnoringCache();
+}
+
 function clearDragLeaveTimer(): void {
   if (dragLeaveTimer) {
     clearTimeout(dragLeaveTimer);
@@ -520,12 +537,17 @@ export function createTray(): void {
     sendPanelState({ mode: 'drop', status: 'done', sentTo: targetName, progress: [...progress] });
   });
 
-  // hovering previews the panel (recent files, quick actions); clicking opens the full app window instead
-  // of toggling the panel — the panel is a glanceable preview, not the click target.
-  // click opens/closes the recent-files panel — it no longer opens the main app window. Use the tray's
-  // right-click menu's "Open AllieMinate" for that instead.
+  // No hover on either platform — click toggles the recent-files panel directly, same convention on both
+  // (macOS: no native menu-bar item hovers-to-preview either; Windows: explicit instruction to drop the
+  // earlier hover+click-opens-app split entirely). Use the tray's right-click menu's "Open AllieMinate" to
+  // reach the full app window instead.
   tray.on('click', () => {
-    toggleRecentPanel();
+    clearDragLeaveTimer();
+    if (process.platform === 'darwin') {
+      toggleMacPanel();
+    } else {
+      toggleRecentPanel();
+    }
   });
 
   // Windows convention: right-click shows a context menu (there's no Dock/Cmd+Q route to quit on

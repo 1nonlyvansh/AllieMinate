@@ -67,16 +67,121 @@ mkdir -p "$APP_RES/backend"
 cp -R "$BACKEND/dist" "$APP_RES/backend/dist"
 cp "$BACKEND/folders.json" "$APP_RES/backend/folders.json"
 echo "== copying node_modules (this takes a bit) =="
-cp -RL "$ROOT/node_modules" "$APP_RES/backend/node_modules"
+# excludes packages the backend (a plain Node child process, no Electron API access — see spawnBackend)
+# never actually imports: electron itself (245MB — the backend runs under Electron's bundled Node via
+# child_process, it doesn't need its OWN copy of the whole Electron.app framework sitting in
+# node_modules/electron/dist) plus pure build-time tooling (typescript/esbuild/@types, ~35MB, nothing but
+# .ts source and dev scripts ever reference them, and dist/ is already-compiled plain .js). This was the
+# single biggest contributor to a 2GB+ DMG — cutting it roughly in half — which in turn was the real cause
+# behind an hour-plus install time on a fresh Mac: macOS's Gatekeeper quarantine scan runs across every
+# file in a freshly-downloaded, unnotarized .app on first copy, so a smaller bundle is a faster install,
+# not just a smaller download.
+rsync -aL \
+  --exclude 'electron' \
+  --exclude 'typescript' \
+  --exclude 'esbuild' \
+  --exclude '@esbuild' \
+  --exclude '@types' \
+  --exclude '@alliminate/desktop' \
+  "$ROOT/node_modules/" "$APP_RES/backend/node_modules/"
 
-# --- restore preserved runtime state (see backup step above) — everything from the previously-installed
-# app's backend dir wins outright (folders.json, accounts.json, photos-accounts.json, cache/, etc);
-# .env is merged so runtime-written tokens survive but new keys added to the source .env still come through. ---
+# --- icon + Info.plist ---
+cp "$DESKTOP/build/AllieMinate.icns" "$APP_RES/AllieMinate.icns"
+
+/usr/libexec/PlistBuddy -c "Set :CFBundleName $APP_NAME" "$BUILD_APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $APP_NAME" "$BUILD_APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.alliminate.app" "$BUILD_APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AllieMinate.icns" "$BUILD_APP/Contents/Info.plist"
+
+# $BUILD_APP is PRISTINE at this point — no accounts, no device identity, no cloud credentials, nothing
+# any previous install ever wrote. That's deliberate: this exact bundle is what both the .dmg AND (after
+# this section) the personalized dev install get built from, and the .dmg copy is taken further down
+# BEFORE any personal state gets restored into it. A prior version of this script restored preserved
+# state (accounts.json, device.json, username.json, the real .env with live OAuth refresh tokens for
+# every connected provider — everything) into $BUILD_APP and THEN copied that same personalized bundle
+# into the .dmg, meaning every .dmg this script built after the first run shipped the developer's own
+# Google Drive/MEGA/etc credentials and identity to whoever installed it. Ship blank .env.example
+# placeholders here — config.ts already runs fine with everything empty (README's own "fresh clone" setup
+# path is exactly this: cp .env.example .env, fill in only what you want).
+cp "$ROOT/.env.example" "$BUILD_APP/Contents/.env"
+
+echo "== code signing (ad-hoc) =="
+# node_modules copied via cp -RL can pick up resource-fork/FinderInfo extended attrs (esp. from
+# node-gyp-built native deps) that make codesign fail with "resource fork, Finder information,
+# or similar detritus not allowed" — strip them before signing.
+xattr -cr "$BUILD_APP"
+codesign --force --deep --sign - "$BUILD_APP"
+
+# --- distributable .dmg — a real double-click-and-drag-to-Applications installer, built from the PRISTINE
+# signed $BUILD_APP above, copied to its own empty source folder BEFORE any personal state gets restored
+# into $BUILD_APP for the dev install further down. create-dmg (and the Finder-scripting it does under the
+# hood) gets confused if anything besides the .app and the Applications symlink it adds itself is sitting
+# in the source dir. ---
+echo "== building AllieMinate.dmg =="
+DMG_SRC="$BUILD_STAGING/dmg-src"
+mkdir -p "$DMG_SRC"
+cp -R "$BUILD_APP" "$DMG_SRC/$APP_NAME.app"
+
+# Not notarized (no paid Apple Developer cert) — the FIRST launch on any Mac other than the one that built
+# it gets Gatekeeper's "AllieMinate Not Opened" block, and clicking "Done" on that dialog just dismisses it
+# without granting the exception, leaving the app permanently unopenable with no further prompt. This was
+# already documented in the README, which nobody installing FROM a .dmg a friend sent them is ever going to
+# go read — so it's a plain text file sitting right next to the app in the .dmg itself instead. Explicitly
+# positioned (see the --icon flag below) since create-dmg's Finder-layout AppleScript only reliably arranges
+# icons it's told about; an unpositioned stray file in the source folder is what causes the "Finder layout
+# race" create-dmg sometimes exits non-zero on.
+cat > "$DMG_SRC/If AllieMinate Won't Open.txt" << 'EOF'
+AllieMinate isn't notarized with a paid Apple Developer certificate, so macOS
+Gatekeeper blocks the very first launch with a warning ("Apple could not
+verify..."). This is normal for a free, independently-built app — it does NOT
+mean anything is wrong with it.
+
+Clicking "Done" on that warning does NOT open the app. Do this instead:
+
+  1. Open System Settings -> Privacy & Security.
+  2. Scroll down to the Security section — you'll see a line about
+     "AllieMinate was blocked."
+  3. Click "Open Anyway", then confirm in the popup that appears.
+
+(Or: right-click AllieMinate.app in Applications -> Open -> Open, BEFORE
+ever double-clicking it the normal way — this only works if it's the very
+first launch attempt.)
+
+You only need to do this once.
+EOF
+
+DMG_OUT="$DESKTOP/build/$APP_NAME.dmg"
+rm -f "$DMG_OUT"
+create-dmg \
+  --volname "$APP_NAME" \
+  --volicon "$DESKTOP/build/AllieMinate.icns" \
+  --window-pos 200 120 \
+  --window-size 660 400 \
+  --icon-size 100 \
+  --icon "$APP_NAME.app" 180 170 \
+  --icon "If AllieMinate Won't Open.txt" 330 280 \
+  --hide-extension "$APP_NAME.app" \
+  --app-drop-link 480 170 \
+  --no-internet-enable \
+  "$DMG_OUT" \
+  "$DMG_SRC" \
+  || echo "create-dmg exited non-zero (it does this on some harmless Finder-layout races) — checking output anyway"
+if [ -f "$DMG_OUT" ]; then
+  echo "done: $DMG_OUT"
+else
+  echo "!! .dmg build failed — see output for the actual error (dev install below is unaffected)"
+fi
+
+# --- personalize $BUILD_APP for the LOCAL dev install only, now that the pristine .dmg copy is already
+# safely taken above — restore preserved state (accounts.json, device.json, username.json, folders.json,
+# cache/, etc — everything from the previously-installed app's own backend dir) and the real .env with
+# live OAuth tokens. Re-signs afterward since the bundle's contents just changed post-signature. ---
+echo "== personalizing dev install =="
 if [ -d "$PRESERVE_DIR/backend" ]; then
   cp -R "$PRESERVE_DIR/backend/." "$APP_RES/backend/"
 fi
 
-# --- shared secrets, same relative depth backend/config.ts expects (Resources/backend/dist/../../../.env == Contents/.env) ---
+# same relative depth backend/config.ts expects (Resources/backend/dist/../../../.env == Contents/.env)
 if [ -f "$PRESERVE_DIR/.env" ]; then
   node -e '
     const fs = require("fs");
@@ -103,18 +208,6 @@ else
   cp "$ROOT/.env" "$BUILD_APP/Contents/.env"
 fi
 
-# --- icon + Info.plist ---
-cp "$DESKTOP/build/AllieMinate.icns" "$APP_RES/AllieMinate.icns"
-
-/usr/libexec/PlistBuddy -c "Set :CFBundleName $APP_NAME" "$BUILD_APP/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $APP_NAME" "$BUILD_APP/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.alliminate.app" "$BUILD_APP/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AllieMinate.icns" "$BUILD_APP/Contents/Info.plist"
-
-echo "== code signing (ad-hoc) =="
-# node_modules copied via cp -RL can pick up resource-fork/FinderInfo extended attrs (esp. from
-# node-gyp-built native deps) that make codesign fail with "resource fork, Finder information,
-# or similar detritus not allowed" — strip them before signing.
 xattr -cr "$BUILD_APP"
 codesign --force --deep --sign - "$BUILD_APP"
 
@@ -122,35 +215,5 @@ echo "== installing to $INSTALL_DIR =="
 mkdir -p "$INSTALL_DIR"
 rm -rf "$INSTALL_DIR/$APP_NAME.app"
 cp -R "$BUILD_APP" "$INSTALL_DIR/$APP_NAME.app"
-
-# --- distributable .dmg — a real double-click-and-drag-to-Applications installer, built from the same
-# freshly-assembled $BUILD_APP the dev install above uses (still valid here, before the EXIT trap wipes
-# the staging dir). Runs from a copy in its own empty source folder — create-dmg (and the Finder-scripting
-# it does under the hood) gets confused if anything besides the .app and the Applications symlink it adds
-# itself is sitting in the source dir. ---
-echo "== building AllieMinate.dmg =="
-DMG_SRC="$BUILD_STAGING/dmg-src"
-mkdir -p "$DMG_SRC"
-cp -R "$BUILD_APP" "$DMG_SRC/$APP_NAME.app"
-DMG_OUT="$DESKTOP/build/$APP_NAME.dmg"
-rm -f "$DMG_OUT"
-create-dmg \
-  --volname "$APP_NAME" \
-  --volicon "$DESKTOP/build/AllieMinate.icns" \
-  --window-pos 200 120 \
-  --window-size 660 400 \
-  --icon-size 100 \
-  --icon "$APP_NAME.app" 180 170 \
-  --hide-extension "$APP_NAME.app" \
-  --app-drop-link 480 170 \
-  --no-internet-enable \
-  "$DMG_OUT" \
-  "$DMG_SRC" \
-  || echo "create-dmg exited non-zero (it does this on some harmless Finder-layout races) — checking output anyway"
-if [ -f "$DMG_OUT" ]; then
-  echo "done: $DMG_OUT"
-else
-  echo "!! .dmg build failed — dev install above still succeeded, see output for the actual error"
-fi
 
 echo "done: $INSTALL_DIR/$APP_NAME.app"

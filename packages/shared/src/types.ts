@@ -87,10 +87,47 @@ export interface ProviderStorage {
 }
 
 export interface SyncEvent {
-  type: 'status' | 'file-synced' | 'conflict' | 'error' | 'storage-updated' | 'nearby-request' | 'unlock-request';
+  type:
+    | 'status'
+    | 'file-synced'
+    | 'conflict'
+    | 'error'
+    | 'storage-updated'
+    | 'nearby-request'
+    | 'unlock-request'
+    | 'universal-sync-invite';
   folderId: string;
   payload: unknown;
 }
+
+/** A Universal Sync Folder invite — sent BY the host device (the one holding the real cloud login) TO each
+ * device it's granting access to, exactly like /nearby/request and /unlock/request are already
+ * device-to-device HTTP pushes. Persisted (not in-memory) since unlike those two, this must survive the
+ * target device being offline or the app being closed when invited. */
+export interface UniversalSyncInvite {
+  id: string;
+  hostDeviceId: string;
+  hostDeviceName: string;
+  /** the host's local-folders shortcut id for this folder (NOT its own SyncPair id — a spoke's
+   * DeviceSyncTarget only ever addresses /folders/:id/* or /local-folders/:id/*, so the host registers a
+   * local-folders shortcut for its own local path and invites point at that instead). The invited
+   * device's resulting SyncPair uses this as its deviceFolderId with deviceFolderKind:'local-folder'. */
+  hostFolderId: string;
+  /** shared across the host pair and every accepted spoke pair, purely for UI grouping ("N devices
+   * connected") — sync itself doesn't need it, each spoke is a normal device-target SyncPair. */
+  universalSyncId: string;
+  name: string;
+  permission: 'read-write' | 'read-only' | 'write-only';
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt: string;
+}
+
+/** permission -> the existing SyncPair.direction it maps onto, unchanged sync-engine semantics either way. */
+export const PERMISSION_TO_DIRECTION: Record<UniversalSyncInvite['permission'], SyncPair['direction']> = {
+  'read-write': 'two-way',
+  'read-only': 'download-only',
+  'write-only': 'backup-only',
+};
 
 /** Sync Engine (v2): a local folder root mapped to a sync destination, independent of the pinned-folder /
  * FolderConfig model — a pinned cloud folder is already tied to one account by construction, but Sync
@@ -124,6 +161,9 @@ export interface SyncPair {
    * today (a Mac only ever lists pairs it created itself), but becomes meaningful once cross-device
    * visibility exists (the Windows build this is prepping for). Captured once at creation, not live. */
   sourceDeviceName?: string;
+  /** set when this pair is one leg of a Universal Sync Folder (host or an accepted spoke) — shared across
+   * every device's pair for the same folder, purely for UI grouping. See UniversalSyncInvite. */
+  universalSyncId?: string;
   name: string;
   createdAt: string;
 }
