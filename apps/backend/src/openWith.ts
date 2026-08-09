@@ -96,10 +96,20 @@ export function saveOpenWithPref(category: OpenWithCategory, appPath: string | n
   fs.writeFileSync(PREFS_PATH, JSON.stringify(prefs, null, 2));
 }
 
+export interface OpenWithApp {
+  name: string;
+  path: string;
+  /** 'exe' (default, omitted on macOS/most Windows results) — path is a real spawnable file. 'uwp' — path
+   * is actually an AppUserModelID (e.g. "Microsoft.Windows.Photos_8wekyb3d8bbwe!App"), since a Windows
+   * Store app has no discrete .exe on disk at all; openLauncher.ts's openLocalFile branches on this to
+   * launch via `explorer.exe shell:AppsFolder\<AUMID>` instead of spawning path+file directly. */
+  kind?: 'exe' | 'uwp';
+}
+
 // app-detection is a fundamentally different mechanism per OS (macOS: LaunchServices/.app bundles under
 // /Applications; Windows: registry file associations, no equivalent bundle directory) — everything above
 // this line is OS-agnostic (categories, prefs storage); getAvailableApps is the one function that isn't.
-export const getAvailableApps: (category: OpenWithCategory) => { name: string; path: string }[] =
+export const getAvailableApps: (category: OpenWithCategory) => OpenWithApp[] =
   process.platform === 'win32'
     ? require('./openWith.win').getAvailableApps
     : require('./openWith.mac').getAvailableApps;

@@ -15,6 +15,13 @@ import { composeMailWithAttachments } from './mail';
 // literal "@alliminate/desktop" folder instead of a proper "AllieMinate" one.
 app.setName('AllieMinate');
 
+// Windows groups/brands toast notifications by AppUserModelID, not by process/window name — without this,
+// every Notification() fired from the renderer (e.g. the "File Received" toast on a device-to-device
+// share) shows up in the Action Center labeled "Electron" while running unpackaged. Packaging with
+// electron-builder sets this automatically via the installer, but that's still ahead (see build-app.sh's
+// Windows counterpart) — set it explicitly here so it's correct in dev too.
+if (process.platform === 'win32') app.setAppUserModelId('com.alliminate.desktop');
+
 // this app keeps running via the tray after the main window closes, which makes it very easy for the
 // user to launch it again (Spotlight, Dock, double-click) without realizing it's already alive —
 // previously nothing stopped a second full process from starting: its own main window, its OWN second

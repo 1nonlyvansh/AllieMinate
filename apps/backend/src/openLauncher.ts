@@ -24,11 +24,34 @@ export function openExternalUrl(url: string): void {
   execFile('open', [url]);
 }
 
+// a stored Open-With preference is a bare string (see openWith.ts's saveOpenWithPref) — for a UWP/Store
+// app (openWith.win.ts's getAvailableApps returning kind:'uwp'), that string is an AppUserModelID like
+// "Microsoft.Windows.Photos_8wekyb3d8bbwe!App", not a filesystem path. AUMIDs never contain a path
+// separator and always end in "!<AppId>"; a real Windows exe path always has at least one backslash. This
+// is a heuristic rather than a stored flag specifically to avoid widening the prefs JSON schema and the
+// Settings UI's app-picker type just for this one distinction — the shape is distinctive enough not to
+// need it.
+function isAppUserModelId(value: string): boolean {
+  return /![^\\/]+$/.test(value) && !value.includes('\\') && !value.includes('/');
+}
+
 /** Launches a local file with a specific app (appPath) or the OS default handler (no appPath) — the
  * macOS `open` command has no Windows equivalent binary, so this branches per platform instead of
  * shelling out to a single cross-platform command. */
 export function openLocalFile(filePath: string, appPath: string | undefined, onError: (err: Error) => void): void {
   if (process.platform === 'win32') {
+    if (appPath && isAppUserModelId(appPath)) {
+      // Store apps have no discrete .exe to spawn — this is the standard CLI-invokable way to activate
+      // one. Known limitation: unlike a plain exe spawn, this launches the app itself rather than
+      // reliably opening `filePath` inside it — passing a specific file to an arbitrary UWP app's
+      // activation from the command line (as opposed to Explorer's own "Open with" flow, which goes
+      // through the IApplicationActivationManager COM API) isn't something a plain spawn can guarantee
+      // for every app; there's no native binding in scope here to do that properly.
+      const child = spawn('explorer', [`shell:AppsFolder\\${appPath}`], { detached: true, stdio: 'ignore' });
+      child.on('error', onError);
+      child.unref();
+      return;
+    }
     // most Windows apps accept a file path as a plain positional argument; with no specific app, explorer
     // handing the path back to itself invokes the same registered default handler `start`/Explorer would.
     const child = spawn(appPath ?? 'explorer', [filePath], { detached: true, stdio: 'ignore' });

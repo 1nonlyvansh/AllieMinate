@@ -205,9 +205,9 @@ function createPanel(): BrowserWindow {
   win.loadFile(path.join(__dirname, '../../src/renderer/trayPanel.html'));
 
   // click-to-open (not hover) means this panel is shown via a real show()+focus() from a deliberate user
-  // action, not showInactive() — so unlike the old hover experiment, there's no spurious-blur-right-after-
-  // show quirk to worry about here, and closing on blur (click elsewhere) is exactly the expected flyout
-  // convention. Never hides mid-drop, so a drag that briefly takes focus elsewhere doesn't abort it.
+  // action, not showInactive() — so unlike the earlier hover experiment, there's no spurious-blur-right-
+  // after-show quirk to worry about here, and closing on blur (click elsewhere) is exactly the expected
+  // flyout convention. Never hides mid-drop, so a drag that briefly takes focus elsewhere doesn't abort it.
   win.on('blur', () => {
     if (!pendingDropFiles) win.hide();
   });
@@ -261,7 +261,7 @@ function positionPanelNearTray(win: BrowserWindow, width = PANEL_WIDTH, height =
   win.setPosition(Math.round(x), Math.round(y), false);
 }
 
-// click opens the recent-files panel (no more hover-to-preview) — a real show()+focus() since this is a
+// click opens the recent-files panel (no hover-to-preview) — a real show()+focus() since this is a
 // deliberate user action, closed by the createPanel() blur handler once the user clicks elsewhere, or by
 // clicking the tray icon again to toggle it shut.
 function toggleRecentPanel(): void {
@@ -300,6 +300,8 @@ async function showDropPanel(): Promise<void> {
   sendPanelState({ mode: 'drop', folders, devices, nearbyPeers, fileNames: pendingDropFiles ?? [], kind: pendingDropKind, status: 'idle' });
 }
 
+// grace period before hiding after a drag leaves the panel/tray without dropping — click-mode has no
+// hover to debounce anymore, this now only matters for the drag-drop flow's own leave events.
 function scheduleHideDropPanel(): void {
   clearDragLeaveTimer();
   dragLeaveTimer = setTimeout(() => {
