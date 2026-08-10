@@ -157,6 +157,63 @@ object MasterApi {
         }
     }
 
+    /** Live battery % + charging state for the device detail screen — Mac-only for now (see backend's
+     * /battery route comment); a Windows peer or a desktop with no battery just returns Err/404, which the
+     * screen shows as "not available" rather than a fake number. */
+    suspend fun battery(host: String, token: String): ApiResult<BatteryInfo> = withContext(Dispatchers.IO) {
+        try {
+            val (status, text) = request(httpUrl(host, "/battery"), "GET", token, null)
+            if (status !in 200..299) return@withContext ApiResult.Err(errorMessage(text, "not available"))
+            val json = JSONObject(text)
+            ApiResult.Ok(BatteryInfo(percent = json.getInt("percent"), charging = json.getBoolean("charging")))
+        } catch (err: Exception) {
+            ApiResult.Err(err.message ?: "couldn't reach Master")
+        }
+    }
+
+    /** Universal Clipboard — fans this phone's own new clipboard text out to one paired master. Fire-and-
+     * forget from the caller's perspective (UniversalClipboard.kt swallows the Err case — best-effort, no
+     * retry/queue, matching the desktop side's own relayClipboardToPeers). */
+    suspend fun pushClipboard(host: String, token: String, text: String, from: String): ApiResult<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val body = JSONObject().apply { put("text", text); put("from", from) }
+            val (status, responseText) = request(httpUrl(host, "/clipboard/push"), "POST", token, body)
+            if (status !in 200..299) return@withContext ApiResult.Err(errorMessage(responseText, "server returned $status"))
+            ApiResult.Ok(Unit)
+        } catch (err: Exception) {
+            ApiResult.Err(err.message ?: "couldn't reach Master")
+        }
+    }
+
+    /** Read-only view into a paired Master's OWN Sync Pair registry (GET /sync/pairs — same route the
+     * desktop renderer's Sync page calls on itself) — lets the phone show "what is this Mac/PC actually
+     * syncing" instead of only ever the phone's own push-only pairs. */
+    suspend fun masterSyncPairs(host: String, token: String): ApiResult<List<MasterSyncPair>> = withContext(Dispatchers.IO) {
+        try {
+            val (status, text) = request(httpUrl(host, "/sync/pairs"), "GET", token, null)
+            if (status !in 200..299) return@withContext ApiResult.Err(errorMessage(text, "server returned $status"))
+            val arr = JSONObject(text).getJSONArray("pairs")
+            val pairs = (0 until arr.length()).map { arr.getJSONObject(it) }.map { o ->
+                val fileCounts = o.optJSONObject("fileCounts")
+                MasterSyncPair(
+                    id = o.getString("id"),
+                    name = o.getString("name"),
+                    localPath = o.getString("localPath"),
+                    targetKind = o.getString("targetKind"),
+                    remotePath = o.optString("remotePath"),
+                    direction = o.optString("direction").ifBlank { "two-way" },
+                    status = o.optString("status").ifBlank { "active" },
+                    paused = o.optBoolean("paused", false),
+                    syncedCount = fileCounts?.optInt("synced") ?: 0,
+                    totalCount = fileCounts?.optInt("total") ?: 0,
+                )
+            }
+            ApiResult.Ok(pairs)
+        } catch (err: Exception) {
+            ApiResult.Err(err.message ?: "couldn't reach Master")
+        }
+    }
+
     /** Camera Backup's destination is a real cloud SERVICE (chosen in Settings), not a pinned-folder
      * config — targets the same /providers/:id/upload route the Finder-style desktop picker and
      * ShareScreen use. Photos are small enough that buffering here (unlike ShareScreen's user-picked
@@ -323,6 +380,235 @@ object MasterApi {
                 ApiResult.Err(err.message ?: "couldn't reach Master")
             } finally {
                 conn.disconnect()
+            }
+        }
+
+    /** Universal Sync Folder push — the target is a PEER's local-folders shortcut on the host (see
+     * backend's localFolders.ts), not a cloud provider folder, so this hits /local-folders/:id/upload
+     * instead of /providers/:id/upload. Same streaming-upload shape as uploadStreamToProvider otherwise. */
+    suspend fun uploadStreamToLocalFolder(
+        host: String,
+        token: String,
+        folderId: String,
+        name: String,
+        input: InputStream,
+        onProgress: ((Long) -> Unit)? = null,
+    ): ApiResult<Unit> =
+        withContext(Dispatchers.IO) {
+            val conn = httpUrl(host, "/local-folders/$folderId/upload?name=${URLEncoder.encode(name, "UTF-8")}")
+                .openConnection() as HttpURLConnection
+            try {
+                conn.requestMethod = "POST"
+                conn.doOutput = true
+                conn.connectTimeout = CONNECT_TIMEOUT_MS
+                conn.readTimeout = UPLOAD_READ_TIMEOUT_MS
+                conn.setChunkedStreamingMode(STREAM_CHUNK_BYTES)
+                conn.setRequestProperty("Authorization", "Bearer $token")
+                conn.setRequestProperty("Content-Type", "application/octet-stream")
+                conn.outputStream.use { out -> input.use { copyWithProgress(it, out, onProgress) } }
+                val status = conn.responseCode
+                if (status !in 200..299) {
+                    val text = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                    return@withContext ApiResult.Err(errorMessage(text, "upload failed ($status)"))
+                }
+                ApiResult.Ok(Unit)
+            } catch (err: Exception) {
+                ApiResult.Err(err.message ?: "couldn't reach Master")
+            } finally {
+                conn.disconnect()
+            }
+        }
+
+    /** Top-level local-folders shortcuts on a Master (Desktop/Downloads/Documents/Pictures/Videos/Music +
+     * that Mac/PC's custom shortcuts) — the device detail screen's "Explore <Name>'s Files" tab list. */
+    suspend fun localFolders(host: String, token: String): ApiResult<List<RemoteFolder>> = withContext(Dispatchers.IO) {
+        try {
+            val (status, text) = request(httpUrl(host, "/local-folders"), "GET", token, null)
+            if (status !in 200..299) return@withContext ApiResult.Err(errorMessage(text, "server returned $status"))
+            val arr = JSONObject(text).getJSONArray("folders")
+            ApiResult.Ok((0 until arr.length()).map { arr.getJSONObject(it) }.map { RemoteFolder(it.getString("id"), it.getString("name"), "") })
+        } catch (err: Exception) {
+            ApiResult.Err(err.message ?: "couldn't reach Master")
+        }
+    }
+
+    /** Full tree browse into one local-folders shortcut, with subfolder drill-down (?path=, same as the
+     * Mac desktop app's Sync destination picker) — unlike localFolderFiles below (kept top-level-only for
+     * its one existing caller), this returns folders too so the Explore screen can navigate into them. */
+    suspend fun browseLocalFolder(host: String, token: String, folderId: String, path: String? = null): ApiResult<LocalFolderListing> =
+        withContext(Dispatchers.IO) {
+            try {
+                val qs = if (path.isNullOrBlank()) "" else "?path=${URLEncoder.encode(path, "UTF-8")}"
+                val (status, text) = request(httpUrl(host, "/local-folders/$folderId/files$qs"), "GET", token, null)
+                if (status !in 200..299) return@withContext ApiResult.Err(errorMessage(text, "server returned $status"))
+                val json = JSONObject(text)
+                val folderArr = json.optJSONArray("folders") ?: org.json.JSONArray()
+                val fileArr = json.optJSONArray("files") ?: org.json.JSONArray()
+                val folders = (0 until folderArr.length()).map { folderArr.getJSONObject(it) }
+                    .map { RemoteFolderEntry(name = it.getString("name"), path = it.getString("path")) }
+                val files = (0 until fileArr.length()).map { fileArr.getJSONObject(it) }.map {
+                    RemoteFile(
+                        path = it.getString("path"),
+                        size = it.optLong("size", 0L),
+                        modifiedAt = it.optString("modifiedAt"),
+                        mimeType = it.optString("mimeType").ifBlank { null },
+                        thumbnailUrl = null,
+                    )
+                }
+                ApiResult.Ok(LocalFolderListing(folders, files))
+            } catch (err: Exception) {
+                ApiResult.Err(err.message ?: "couldn't reach Master")
+            }
+        }
+
+    /** Read-only Universal Sync grants don't get a push SyncPair (nothing to push) — this lists the
+     * host's local-folders shortcut directly so the phone can at least browse/download what's there.
+     * Top-level only, matching Sync Pair browsing's own Phase 1 scope. */
+    suspend fun localFolderFiles(host: String, token: String, folderId: String): ApiResult<List<RemoteFile>> =
+        withContext(Dispatchers.IO) {
+            try {
+                val (status, text) = request(httpUrl(host, "/local-folders/$folderId/files"), "GET", token, null)
+                if (status !in 200..299) return@withContext ApiResult.Err(errorMessage(text, "server returned $status"))
+                val arr = JSONObject(text).getJSONArray("files")
+                ApiResult.Ok(
+                    (0 until arr.length()).map {
+                        val f = arr.getJSONObject(it)
+                        RemoteFile(
+                            path = f.getString("path"),
+                            size = f.optLong("size", 0L),
+                            modifiedAt = f.optString("modifiedAt"),
+                            mimeType = f.optString("mimeType").ifBlank { null },
+                            thumbnailUrl = f.optString("thumbnailUrl").ifBlank { null },
+                        )
+                    },
+                )
+            } catch (err: Exception) {
+                ApiResult.Err(err.message ?: "couldn't reach Master")
+            }
+        }
+
+    suspend fun downloadLocalFolderFile(host: String, token: String, folderId: String, key: String): ApiResult<ByteArray> =
+        withContext(Dispatchers.IO) {
+            val conn = httpUrl(host, "/local-folders/$folderId/download?key=${URLEncoder.encode(key, "UTF-8")}")
+                .openConnection() as HttpURLConnection
+            try {
+                conn.requestMethod = "GET"
+                conn.connectTimeout = CONNECT_TIMEOUT_MS
+                conn.readTimeout = 60_000
+                conn.setRequestProperty("Authorization", "Bearer $token")
+                val status = conn.responseCode
+                if (status !in 200..299) {
+                    val text = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                    return@withContext ApiResult.Err(errorMessage(text, "download failed ($status)"))
+                }
+                ApiResult.Ok(conn.inputStream.use { it.readBytes() })
+            } catch (err: Exception) {
+                ApiResult.Err(err.message ?: "couldn't reach Master")
+            } finally {
+                conn.disconnect()
+            }
+        }
+
+    /** Files inside one of the MASTER's own Sync Pairs (task 188's full remote browser) — the pair's live
+     * sync state, keyed by relPath, which already covers every subfolder depth since a Sync Pair's own
+     * engine tracks the whole tree, not just the top level like localFolderFiles() above. */
+    suspend fun syncPairFiles(host: String, token: String, pairId: String): ApiResult<List<RemoteFile>> =
+        withContext(Dispatchers.IO) {
+            try {
+                val (status, text) = request(httpUrl(host, "/sync/pairs/$pairId/files"), "GET", token, null)
+                if (status !in 200..299) return@withContext ApiResult.Err(errorMessage(text, "server returned $status"))
+                val arr = JSONObject(text).getJSONArray("files")
+                ApiResult.Ok(
+                    (0 until arr.length()).map {
+                        val f = arr.getJSONObject(it)
+                        RemoteFile(
+                            path = f.getString("relPath"),
+                            size = f.optLong("size", 0L),
+                            modifiedAt = f.optString("modifiedAt"),
+                            mimeType = null,
+                            thumbnailUrl = null,
+                        )
+                    },
+                )
+            } catch (err: Exception) {
+                ApiResult.Err(err.message ?: "couldn't reach Master")
+            }
+        }
+
+    suspend fun downloadSyncPairFile(host: String, token: String, pairId: String, key: String): ApiResult<ByteArray> =
+        withContext(Dispatchers.IO) {
+            val conn = httpUrl(host, "/sync/pairs/$pairId/download?key=${URLEncoder.encode(key, "UTF-8")}")
+                .openConnection() as HttpURLConnection
+            try {
+                conn.requestMethod = "GET"
+                conn.connectTimeout = CONNECT_TIMEOUT_MS
+                conn.readTimeout = 60_000
+                conn.setRequestProperty("Authorization", "Bearer $token")
+                val status = conn.responseCode
+                if (status !in 200..299) {
+                    val text = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                    return@withContext ApiResult.Err(errorMessage(text, "download failed ($status)"))
+                }
+                ApiResult.Ok(conn.inputStream.use { it.readBytes() })
+            } catch (err: Exception) {
+                ApiResult.Err(err.message ?: "couldn't reach Master")
+            } finally {
+                conn.disconnect()
+            }
+        }
+
+    /** Add: uploads a phone-picked file straight into the pair's synced folder on the Master. */
+    suspend fun uploadSyncPairFile(host: String, token: String, pairId: String, name: String, bytes: ByteArray): ApiResult<Unit> =
+        withContext(Dispatchers.IO) {
+            val conn = httpUrl(host, "/sync/pairs/$pairId/upload?name=${URLEncoder.encode(name, "UTF-8")}")
+                .openConnection() as HttpURLConnection
+            try {
+                conn.requestMethod = "POST"
+                conn.doOutput = true
+                conn.connectTimeout = CONNECT_TIMEOUT_MS
+                conn.readTimeout = 60_000
+                conn.setRequestProperty("Authorization", "Bearer $token")
+                conn.setRequestProperty("Content-Type", "application/octet-stream")
+                conn.outputStream.use { it.write(bytes) }
+                val status = conn.responseCode
+                if (status !in 200..299) {
+                    val text = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                    return@withContext ApiResult.Err(errorMessage(text, "upload failed ($status)"))
+                }
+                ApiResult.Ok(Unit)
+            } catch (err: Exception) {
+                ApiResult.Err(err.message ?: "couldn't reach Master")
+            } finally {
+                conn.disconnect()
+            }
+        }
+
+    suspend fun deleteSyncPairFile(host: String, token: String, pairId: String, key: String): ApiResult<Unit> =
+        withContext(Dispatchers.IO) {
+            try {
+                val (status, text) = request(
+                    httpUrl(host, "/sync/pairs/$pairId/file?key=${URLEncoder.encode(key, "UTF-8")}"),
+                    "DELETE",
+                    token,
+                    null,
+                )
+                if (status !in 200..299) return@withContext ApiResult.Err(errorMessage(text, "delete failed ($status)"))
+                ApiResult.Ok(Unit)
+            } catch (err: Exception) {
+                ApiResult.Err(err.message ?: "couldn't reach Master")
+            }
+        }
+
+    /** Move: relocate a file to a different subfolder within the same pair (empty newSubPath = pair root). */
+    suspend fun moveSyncPairFile(host: String, token: String, pairId: String, key: String, newSubPath: String): ApiResult<Unit> =
+        withContext(Dispatchers.IO) {
+            try {
+                val body = JSONObject().put("key", key).put("newSubPath", newSubPath)
+                val (status, text) = request(httpUrl(host, "/sync/pairs/$pairId/move"), "POST", token, body)
+                if (status !in 200..299) return@withContext ApiResult.Err(errorMessage(text, "move failed ($status)"))
+                ApiResult.Ok(Unit)
+            } catch (err: Exception) {
+                ApiResult.Err(err.message ?: "couldn't reach Master")
             }
         }
 

@@ -32,6 +32,11 @@ export class DeviceSyncTarget implements SyncTarget {
     // just against /local-folders/* instead of /folders/* on the peer — the reconciliation engine above
     // this class neither knows nor cares which kind of folder it's syncing against.
     private remoteKind: 'folder' | 'local-folder' = 'folder',
+    // relative subpath WITHIN remoteFolderId (e.g. "Personal/Me/Photos") — lets a Sync Pair target a
+    // nested destination instead of only ever the folder's top level. Only meaningful for a 'local-folder'
+    // target (the peer's /local-folders/:id/files route is the one that understands ?path=); '' for every
+    // pair created before this existed, which is exactly the old always-top-level behavior.
+    private subPath: string = '',
   ) {}
 
   private authHeaders(): Record<string, string> {
@@ -43,7 +48,8 @@ export class DeviceSyncTarget implements SyncTarget {
   }
 
   async list(_prefix: string): Promise<FileEntry[]> {
-    const res = await fetch(`http://${this.peer.host}/${this.basePath}/${this.remoteFolderId}/files`, { headers: this.authHeaders() });
+    const qs = this.subPath ? `?path=${encodeURIComponent(this.subPath)}` : '';
+    const res = await fetch(`http://${this.peer.host}/${this.basePath}/${this.remoteFolderId}/files${qs}`, { headers: this.authHeaders() });
     if (!res.ok) throw new Error(`device unreachable (${res.status})`);
     const data = await res.json();
     return (data.files ?? []) as FileEntry[];
@@ -67,7 +73,8 @@ export class DeviceSyncTarget implements SyncTarget {
   }
 
   async put(key: string, data: Buffer): Promise<void> {
-    const name = key.split('/').pop() ?? key;
+    const baseName = key.split('/').pop() ?? key;
+    const name = this.subPath ? `${this.subPath}/${baseName}` : baseName;
     const targetFolder = this.isFixedAndroidInbox ? 'received' : this.remoteFolderId;
     const res = await fetch(`http://${this.peer.host}/${this.basePath}/${targetFolder}/upload?name=${encodeURIComponent(name)}`, {
       method: 'POST',

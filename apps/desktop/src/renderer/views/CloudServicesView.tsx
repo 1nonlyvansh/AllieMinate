@@ -10,6 +10,8 @@ import { Thumbnail } from '../components/Thumbnail';
 import { DropdownMenu } from '../components/DropdownMenu';
 import { CLOUD_ICONS } from '../lib/cloudIcons';
 import { PreviewModal, PreviewTarget } from '../components/PreviewModal';
+import { MarqueeRect } from '../components/MarqueeRect';
+import { useMarqueeSelect } from '../lib/useMarqueeSelect';
 import { Skeleton } from '../components/Skeleton';
 import { RenameModal } from '../components/RenameModal';
 import { FileDetailsModal } from '../components/FileDetailsModal';
@@ -50,6 +52,7 @@ export function CloudServicesView({
   onClipboardChange,
   onOpenPinnedFolder,
   onOpenSync,
+  onOpenSettings,
 }: {
   connected: string[];
   loading?: boolean;
@@ -59,6 +62,7 @@ export function CloudServicesView({
   onClipboardChange: (c: ClipboardEntry) => void;
   onOpenPinnedFolder: (id: string) => void;
   onOpenSync: () => void;
+  onOpenSettings: () => void;
 }) {
   const [openProvider, setOpenProvider] = useState<string | null>(null);
   const [files, setFiles] = useState<FileEntry[]>([]);
@@ -73,6 +77,8 @@ export function CloudServicesView({
   const [preview, setPreview] = useState<PreviewTarget | null>(null);
   const [accountLabels, setAccountLabels] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectAnchor, setSelectAnchor] = useState<string | null>(null);
+  const marqueeSelect = useMarqueeSelect(() => selected, setSelected);
   const [pending, setPending] = useState<PendingAction>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const [progress, setProgress] = useState<{ label: string; done: number; total: number } | null>(null);
@@ -193,6 +199,38 @@ export function CloudServicesView({
   const pinnedForProvider = currentFolderId === null ? folders.filter((f) => f.provider === openProvider && f.pinned !== false) : [];
   const syncPairsForProvider = currentFolderId === null ? syncPairs.filter((p) => p.targetKind === 'cloud' && p.providerId === openProvider) : [];
 
+  // Spacebar previews the single selected file — image/video only, matching what PreviewModal actually
+  // renders inline now (everything else opens straight in its app via the Open In App action).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.code !== 'Space') return;
+      const tag = (document.activeElement?.tagName ?? '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (selected.size !== 1) return;
+      const f = filtered.find((r) => selected.has(r.path));
+      if (!f || !openProvider) return;
+      const cat = broadCategorize(f.path, f.mimeType);
+      if (cat !== 'image' && cat !== 'video') return;
+      e.preventDefault();
+      setPreview((cur) =>
+        cur
+          ? null
+          : {
+              source: { kind: 'provider', providerId: openProvider },
+              key: f.path,
+              name: fileName(f.path),
+              size: f.size,
+              provider: openProvider,
+              folderName: labelFor(openProvider),
+              modifiedAt: f.modifiedAt,
+              hash: f.hash,
+            },
+      );
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected, filtered, openProvider]);
+
   async function downloadFile(f: FileEntry) {
     const res = await fetch(`${API_BASE}/providers/${openProvider}/download?key=${encodeURIComponent(f.path)}`);
     if (!res.ok) return;
@@ -205,7 +243,7 @@ export function CloudServicesView({
     URL.revokeObjectURL(url);
   }
 
-  async function openInApp(f: FileEntry) {
+  async function openInApp(f: { path: string; mimeType?: string }) {
     await fetch(`${API_BASE}/files/open`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -243,6 +281,28 @@ export function CloudServicesView({
       next.has(path) ? next.delete(path) : next.add(path);
       return next;
     });
+  }
+
+  // Finder-style click selection: plain click selects ONLY this file (replaces whatever was selected),
+  // Cmd/Ctrl-click toggles this file into/out of the existing selection, Shift-click selects the
+  // contiguous range from the last plain/cmd click (selectAnchor) through this file.
+  function selectOnClick(e: React.MouseEvent, path: string) {
+    if (e.shiftKey && selectAnchor) {
+      const paths = filtered.map((f) => f.path);
+      const a = paths.indexOf(selectAnchor);
+      const b = paths.indexOf(path);
+      if (a !== -1 && b !== -1) {
+        const [start, end] = a < b ? [a, b] : [b, a];
+        setSelected(new Set(paths.slice(start, end + 1)));
+        return;
+      }
+    }
+    if (e.metaKey || e.ctrlKey) {
+      toggleSelect(path);
+    } else {
+      setSelected(new Set([path]));
+    }
+    setSelectAnchor(path);
   }
 
   async function bulkDelete() {
@@ -349,6 +409,11 @@ export function CloudServicesView({
     refresh();
   }
 
+  async function downloadSelected() {
+    const targets = filtered.filter((f) => selected.has(f.path));
+    for (const f of targets) await downloadFile(f);
+  }
+
   function bulkCopyOrCut(action: 'copy' | 'cut') {
     const items: ClipboardFileItem[] = Array.from(selected).map((p) => ({ folderId: `provider:${openProvider}`, path: p, name: fileName(p) }));
     onClipboardChange({ kind: 'file', action, items });
@@ -373,6 +438,11 @@ export function CloudServicesView({
                 ? `No clouds of its own — browse ${deviceRole.masterPeer ? deviceRole.masterPeer.name : 'your paired device'}'s clouds from Devices instead.`
                 : 'No clouds connected yet — connect one from Settings.'}
             </div>
+            {!deviceRole.isUnderDevice && (
+              <button className="btn primary" style={{ marginTop: 14 }} onClick={onOpenSettings}>
+                Go to Settings
+              </button>
+            )}
           </div>
         )}
 
@@ -470,6 +540,7 @@ export function CloudServicesView({
         <div className="bulk-bar visible">
           <span>{selected.size} selected</span>
           <div className="spacer" />
+          <button className="btn small" onClick={downloadSelected}>Download</button>
           <button className="btn small" onClick={() => bulkCopyOrCut('copy')}>Copy</button>
           <button className="btn small" onClick={() => bulkCopyOrCut('cut')}>Cut</button>
           <button className="btn small" onClick={() => setPending({ kind: 'move-cloud', paths: Array.from(selected) })}>Move to Another Cloud</button>
@@ -482,7 +553,11 @@ export function CloudServicesView({
       {error && <div className="glass-card empty-state" style={{ color: 'var(--offline)' }}>{error}</div>}
 
       {!loading && !error && (
-        <div className="folder-grid">
+        <div
+          className="folder-grid"
+          ref={(el) => { marqueeSelect.containerRef.current = el; }}
+          onMouseDown={marqueeSelect.onMouseDown}
+        >
           {/* Pinned Folders — AllieMinate's own registered folders (created from the Pinned Folders page)
               — live in a completely separate system from the account's real native folder tree below (a
               pinned folder has no corresponding real cloud folder; its files are stored under a flat key
@@ -532,8 +607,10 @@ export function CloudServicesView({
           {filtered.map((f) => (
             <div
               key={f.path}
-              className="folder-card glass-card"
-              onClick={() => openInApp(f)}
+              data-select-id={f.path}
+              className={`folder-card glass-card${selected.has(f.path) ? ' selected' : ''}`}
+              onClick={(e) => selectOnClick(e, f.path)}
+              onDoubleClick={() => openInApp(f)}
             >
               <input
                 type="checkbox"
@@ -557,7 +634,16 @@ export function CloudServicesView({
         </div>
       )}
 
-      {preview && <PreviewModal file={preview} apiBase={API_BASE} onClose={() => setPreview(null)} />}
+      <MarqueeRect rect={marqueeSelect.marquee} />
+
+      {preview && (
+        <PreviewModal
+          file={preview}
+          apiBase={API_BASE}
+          onClose={() => setPreview(null)}
+          onOpenInApp={() => openInApp({ path: preview.key })}
+        />
+      )}
 
       {pending?.kind === 'rename' && (
         <RenameModal

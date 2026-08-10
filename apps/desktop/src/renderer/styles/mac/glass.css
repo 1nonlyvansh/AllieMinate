@@ -131,7 +131,16 @@ button, select, input { font-family: inherit; }
 
 .collapse-btn {
   -webkit-app-region: no-drag;
-  position: absolute; top: 16px; right: 12px;
+  /* Anchored to the LEFT edge, not right — the sidebar's own width changes on hover (see
+     .sidebar.collapsed:hover below), so a right-anchored button would jump sideways by however much the
+     sidebar just grew, landing wherever the cursor ISN'T anymore. The left edge never moves between
+     collapsed/expanded, so this keeps the button under the cursor through the whole hover transition.
+     left:80px (not 12px, and not the smaller 60px tried first — still collided) specifically to clear
+     macOS's native traffic-light window controls: Apple's own HIG reserves ~78px from the left edge as the
+     "don't put custom controls here" zone for a hidden-titlebar window, and those controls are drawn by
+     the OS above any web content — a button placed under them is both invisible and unclickable regardless
+     of what the CSS says, no matter how sure the math looks from a screenshot. */
+  position: absolute; top: 16px; left: 80px;
   width: 26px; height: 26px; border-radius: 7px; border: none;
   background: transparent; cursor: pointer; color: var(--text-secondary);
   display: flex; align-items: center; justify-content: center;
@@ -236,9 +245,12 @@ button, select, input { font-family: inherit; }
 @media (prefers-color-scheme: dark) { .status-pill.online { color: var(--online); } }
 
 /* Folders */
-.folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 12px; }
+.folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 12px; user-select: none; -webkit-user-select: none; }
 .folder-card { padding: 16px 12px; text-align: center; position: relative; cursor: pointer; overflow: hidden; }
 .folder-card:hover { background: var(--glass-bg-strong); }
+.folder-card.selected { background: var(--accent-soft); outline: 1.5px solid var(--accent); outline-offset: -1.5px; }
+
+.marquee-select { border: 1px solid var(--accent); background: var(--accent-soft); opacity: 0.85; pointer-events: none; z-index: 150; border-radius: 3px; }
 .folder-icon { width: 34px; height: 28px; margin: 0 auto 8px; opacity: 0.9; }
 .folder-name {
   font-size: 12px; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -279,7 +291,7 @@ button, select, input { font-family: inherit; }
 
 /* Table */
 .table-wrap { overflow: hidden; }
-.table-scroll { overflow-x: auto; }
+.table-scroll { overflow-x: auto; user-select: none; -webkit-user-select: none; }
 table.files { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 table.files th {
   text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary);
@@ -458,6 +470,56 @@ table.files tbody tr.row-active { background: var(--accent-soft); }
 .prop-table tr:last-child td { border-bottom: none; }
 
 .empty-state { text-align: center; padding: 40px 20px; color: var(--text-tertiary); font-size: 12.5px; }
+
+/* Unified image/video preview — deliberately dark/lightbox-style regardless of system theme, unlike the
+   regular light glass modal chrome, since it's hosting media rather than property lists. */
+.preview-overlay { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.72); z-index: 200; align-items: center; justify-content: center; padding: 24px; }
+.preview-overlay.open { display: flex; animation: modal-overlay-in 0.16s ease-out; }
+.preview-shell {
+  width: 100%; height: 100%; max-width: 1200px; max-height: 88vh; display: flex; flex-direction: column;
+  background: rgba(20, 20, 22, 0.92); backdrop-filter: blur(30px) saturate(160%); -webkit-backdrop-filter: blur(30px) saturate(160%);
+  border-radius: var(--r-lg); border: 1px solid rgba(255, 255, 255, 0.12); box-shadow: var(--shadow-modal); overflow: hidden;
+  animation: modal-in 0.18s cubic-bezier(0.2, 0.8, 0.3, 1.1);
+}
+.preview-topbar { position: relative; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; padding: 10px 14px; gap: 8px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); flex-shrink: 0; }
+.preview-topbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 auto; }
+.preview-filename { color: rgba(255, 255, 255, 0.85); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; }
+.preview-topbar-center { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; order: 3; margin-left: auto; }
+.preview-topbar-right { display: flex; align-items: center; flex: 0 0 auto; }
+.preview-icon-btn { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; border: none; background: transparent; color: rgba(255, 255, 255, 0.75); cursor: pointer; flex-shrink: 0; }
+.preview-icon-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.preview-icon-btn.active { background: rgba(255, 255, 255, 0.18); color: #fff; }
+
+.preview-body { flex: 1; display: flex; min-height: 0; }
+.preview-stage { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 20px; position: relative; }
+.preview-stage .empty-state { color: rgba(255, 255, 255, 0.55); }
+.preview-image { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; transition: transform 0.15s ease; }
+
+.preview-video-wrap { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.preview-video { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; cursor: pointer; }
+.preview-video-controls {
+  position: absolute; left: 16px; right: 16px; bottom: 16px; display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 12px; background: rgba(20, 20, 22, 0.55);
+  backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.14); max-width: 100%; box-sizing: border-box;
+}
+.preview-video-time { font-size: 11px; color: rgba(255, 255, 255, 0.75); font-variant-numeric: tabular-nums; min-width: 30px; text-align: center; flex-shrink: 0; }
+/* a range input's intrinsic min-width doesn't yield to flex:1 alone — without min-width:0 here, the
+   timeline refuses to shrink below its default browser width and pushes the trailing time/speed controls
+   past the bar's own right edge in a narrow container (the tray panel's ~340px window). */
+.preview-video-timeline { flex: 1; min-width: 0; accent-color: var(--accent); cursor: pointer; }
+.preview-speed-wrap { position: relative; flex-shrink: 0; }
+.preview-speed-btn { padding: 4px 8px; border-radius: 6px; border: none; background: rgba(255, 255, 255, 0.1); color: #fff; font-size: 11px; cursor: pointer; min-width: 38px; flex-shrink: 0; }
+.preview-speed-btn:hover { background: rgba(255, 255, 255, 0.18); }
+.preview-speed-menu { position: absolute; bottom: calc(100% + 6px); right: 0; background: rgba(30, 30, 33, 0.95); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px; padding: 4px; display: flex; flex-direction: column; min-width: 56px; box-shadow: var(--shadow-modal); }
+.preview-speed-option { padding: 5px 10px; border: none; background: transparent; color: rgba(255, 255, 255, 0.8); font-size: 11px; text-align: left; border-radius: 5px; cursor: pointer; }
+.preview-speed-option:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.preview-speed-option.active { background: var(--accent-soft); color: var(--accent-text); }
+
+.preview-details-panel { width: 260px; flex-shrink: 0; border-left: 1px solid rgba(255, 255, 255, 0.1); padding: 16px; overflow-y: auto; background: rgba(0, 0, 0, 0.15); }
+.preview-details-panel h3 { margin: 0 0 12px; font-size: 13px; color: rgba(255, 255, 255, 0.9); font-weight: 600; }
+.preview-details-panel .prop-table td { border-bottom-color: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.85); }
+.preview-details-panel .prop-table td:first-child { color: rgba(255, 255, 255, 0.5); }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.18); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }

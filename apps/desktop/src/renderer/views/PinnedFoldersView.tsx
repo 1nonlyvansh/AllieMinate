@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { ProviderStorage } from '@alliminate/shared';
 import type { FolderMeta, FilesByFolder, ClipboardEntry, ClipboardFileItem } from '../lib/types';
-import { formatBytes } from '../lib/format';
+import { formatBytes, broadCategorize } from '../lib/format';
 import { IconFolder, IconAdd, IconChevronLeft, IconUpload } from '../icons';
 import { Thumbnail } from '../components/Thumbnail';
 import { PreviewModal, PreviewTarget } from '../components/PreviewModal';
@@ -13,6 +13,10 @@ import { DropdownMenu } from '../components/DropdownMenu';
 import { RenameModal } from '../components/RenameModal';
 import { FileDetailsModal } from '../components/FileDetailsModal';
 import { ProgressModal } from '../components/ProgressModal';
+import { ProviderPickerModal } from '../components/ProviderPickerModal';
+import { DestinationPickerModal } from '../components/DestinationPickerModal';
+import { MarqueeRect } from '../components/MarqueeRect';
+import { useMarqueeSelect } from '../lib/useMarqueeSelect';
 import { runWithProgress } from '../lib/batch';
 import { resolveDestNames } from '../lib/duplicateCheck';
 import { copyFileToClipboard } from '../lib/copyToClipboard';
@@ -43,6 +47,10 @@ export function PinnedFoldersView({
   onClipboardChange: (c: ClipboardEntry) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectAnchor, setSelectAnchor] = useState<string | null>(null);
+  const marqueeSelect = useMarqueeSelect(() => selected, setSelected);
+  const [bulkAction, setBulkAction] = useState<'move-cloud' | 'copy-pinned' | null>(null);
   const [preview, setPreview] = useState<PreviewTarget | null>(null);
   const [showAddFolder, setShowAddFolder] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
@@ -56,6 +64,43 @@ export function PinnedFoldersView({
   useEffect(() => {
     if (openRequest) setOpenId(openRequest.folderId);
   }, [openRequest]);
+
+  useEffect(() => {
+    setSelected(new Set());
+    setSelectAnchor(null);
+  }, [openId]);
+
+  // hooks-safe mirror of the `files` list built inside the `if (open)` render branch below — a plain
+  // `const` there can't be reached by this effect, which needs to run every render regardless of whether
+  // a folder happens to be open.
+  const openFiles = useMemo(
+    () => (openId ? (filesByFolder[openId] ?? []).map((f, i) => ({ ...f, uid: `${openId}::${i}::${f.path}` })) : []),
+    [openId, filesByFolder],
+  );
+
+  // Spacebar previews the single selected file — image/video only, matching what PreviewModal actually
+  // renders inline now (everything else opens straight in its app).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.code !== 'Space') return;
+      const tag = (document.activeElement?.tagName ?? '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (selected.size !== 1 || !open) return;
+      const f = openFiles.find((r) => selected.has(r.uid));
+      if (!f) return;
+      const cat = broadCategorize(f.path, f.mimeType);
+      if (cat !== 'image' && cat !== 'video') return;
+      e.preventDefault();
+      const name = f.path.split('/').pop() ?? f.path;
+      setPreview((cur) =>
+        cur
+          ? null
+          : { source: { kind: 'folder', folderId: open.id }, key: f.path, name, size: f.size, provider: open.provider, folderName: open.name, modifiedAt: f.modifiedAt, hash: f.hash },
+      );
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected, openFiles, open]);
 
   async function openInApp(folderId: string, key: string, mimeType?: string) {
     await fetch(`${API_BASE}/files/open`, {
@@ -147,6 +192,126 @@ export function PinnedFoldersView({
     onRefresh();
   }
 
+  function toggleSelect(uid: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(uid) ? next.delete(uid) : next.add(uid);
+      return next;
+    });
+  }
+
+  // Finder-style click selection: plain click selects ONLY this file (replaces whatever was selected),
+  // Cmd/Ctrl-click toggles this file into/out of the existing selection, Shift-click selects the
+  // contiguous range from the last plain/cmd click (selectAnchor) through this file.
+  function selectOnClick(e: React.MouseEvent, uid: string) {
+    if (e.shiftKey && selectAnchor) {
+      const ids = openFiles.map((f) => f.uid);
+      const a = ids.indexOf(selectAnchor);
+      const b = ids.indexOf(uid);
+      if (a !== -1 && b !== -1) {
+        const [start, end] = a < b ? [a, b] : [b, a];
+        setSelected(new Set(ids.slice(start, end + 1)));
+        return;
+      }
+    }
+    if (e.metaKey || e.ctrlKey) {
+      toggleSelect(uid);
+    } else {
+      setSelected(new Set([uid]));
+    }
+    setSelectAnchor(uid);
+  }
+
+  function selectedFiles() {
+    return openFiles.filter((f) => selected.has(f.uid));
+  }
+
+  async function downloadSelectedBulk() {
+    if (!open) return;
+    for (const f of selectedFiles()) await downloadFile(open.id, f.path);
+  }
+
+  function bulkCopyOrCut(action: 'copy' | 'cut') {
+    if (!open) return;
+    const items: ClipboardFileItem[] = selectedFiles().map((f) => ({ folderId: open.id, path: f.path, name: f.path.split('/').pop() ?? f.path }));
+    onClipboardChange({ kind: 'file', action, items });
+    setSelected(new Set());
+  }
+
+  async function bulkMoveOrCopyToCloud(destProviderId: string, action: 'copy' | 'move') {
+    if (!open) return;
+    const targets = selectedFiles();
+    let items: (typeof targets[number] & { destName: string })[] | null = targets.map((f) => ({ ...f, destName: f.path.split('/').pop() ?? f.path }));
+    if (action === 'copy') {
+      const resolved = await resolveDestNames({ providerId: destProviderId }, targets.map((f) => ({ ...f, name: f.path.split('/').pop() ?? f.path })));
+      if (!resolved) return;
+      items = resolved;
+    }
+    setBulkAction(null);
+    const label = action === 'copy' ? 'Copying' : 'Moving';
+    setProgress({ label, done: 0, total: items.length });
+    await runWithProgress(
+      items,
+      (f) =>
+        fetch(`${API_BASE}/files/${action}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sourceFolderId: open.id, key: f.path, destProviderId, destName: f.destName }),
+        }).then(() => undefined),
+      (done, total) => setProgress({ label, done, total }),
+    );
+    setProgress(null);
+    setSelected(new Set());
+    onRefresh();
+  }
+
+  async function bulkAddToPinnedFolder(destFolderId: string, action: 'copy' | 'move') {
+    if (!open) return;
+    const targets = selectedFiles();
+    let items: (typeof targets[number] & { destName: string })[] | null = targets.map((f) => ({ ...f, destName: f.path.split('/').pop() ?? f.path }));
+    if (action === 'copy') {
+      const resolved = await resolveDestNames({ folderId: destFolderId }, targets.map((f) => ({ ...f, name: f.path.split('/').pop() ?? f.path })));
+      if (!resolved) return;
+      items = resolved;
+    }
+    setBulkAction(null);
+    const label = action === 'copy' ? 'Adding to folder' : 'Moving';
+    setProgress({ label, done: 0, total: items.length });
+    await runWithProgress(
+      items,
+      (f) =>
+        fetch(`${API_BASE}/files/${action}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sourceFolderId: open.id, key: f.path, destFolderId, destName: f.destName }),
+        }).then(() => undefined),
+      (done, total) => setProgress({ label, done, total }),
+    );
+    setProgress(null);
+    setSelected(new Set());
+    onRefresh();
+  }
+
+  async function bulkDeleteSelected() {
+    if (!open) return;
+    const targets = selectedFiles();
+    if (!window.confirm(`Move ${targets.length} file(s) to Trash?`)) return;
+    setProgress({ label: 'Deleting', done: 0, total: targets.length });
+    await runWithProgress(
+      targets,
+      (f) =>
+        fetch(`${API_BASE}/files/trash`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folderId: open.id, key: f.path }),
+        }).then(() => undefined),
+      (done, total) => setProgress({ label: 'Deleting', done, total }),
+    );
+    setProgress(null);
+    setSelected(new Set());
+    onRefresh();
+  }
+
   function fileMenuItems(folderId: string, folderProvider: string, folderName: string, f: { path: string; size: number; modifiedAt: string; hash: string; mimeType?: string }) {
     const name = f.path.split('/').pop() ?? f.path;
     const sendFile: SendableFile = { kind: 'cloud', folderId, key: f.path, mimeType: f.mimeType };
@@ -173,7 +338,7 @@ export function PinnedFoldersView({
   }
 
   if (open) {
-    const files = (filesByFolder[open.id] ?? []).map((f, i) => ({ ...f, uid: `${open.id}::${i}::${f.path}` }));
+    const files = openFiles;
     return (
       <section className="view active">
         <div className="view-header">
@@ -196,17 +361,36 @@ export function PinnedFoldersView({
           </div>
         </div>
 
+        {selected.size > 0 && (
+          <div className="bulk-bar visible">
+            <span>{selected.size} selected</span>
+            <div className="spacer" />
+            <button className="btn small" onClick={downloadSelectedBulk}>Download</button>
+            <button className="btn small" onClick={() => bulkCopyOrCut('copy')}>Copy</button>
+            <button className="btn small" onClick={() => bulkCopyOrCut('cut')}>Cut</button>
+            <button className="btn small" onClick={() => setBulkAction('move-cloud')}>Move to Another Cloud</button>
+            <button className="btn small" onClick={() => setBulkAction('copy-pinned')}>Add to Pinned Folder</button>
+            <button className="btn small danger-outline" onClick={bulkDeleteSelected}>Delete</button>
+          </div>
+        )}
+
         {files.length === 0 && <div className="glass-card empty-state">This folder is empty — click "Add Files" to put something in it.</div>}
 
         {files.length > 0 && (
-          <div className="folder-grid">
+          <div
+            className="folder-grid"
+            ref={(el) => { marqueeSelect.containerRef.current = el; }}
+            onMouseDown={marqueeSelect.onMouseDown}
+          >
             {files.map((f) => {
               const name = f.path.split('/').pop() ?? f.path;
               return (
                 <div
                   key={f.uid}
-                  className="folder-card glass-card"
-                  onClick={() => openInApp(open.id, f.path, f.mimeType)}
+                  data-select-id={f.uid}
+                  className={`folder-card glass-card${selected.has(f.uid) ? ' selected' : ''}`}
+                  onClick={(e) => selectOnClick(e, f.uid)}
+                  onDoubleClick={() => openInApp(open.id, f.path, f.mimeType)}
                 >
                   <DropdownMenu items={fileMenuItems(open.id, open.provider, open.name, f)} />
                   <Thumbnail folderId={open.id} fileKey={f.path} name={name} size={f.size} thumbnailUrl={f.thumbnailUrl} />
@@ -218,7 +402,38 @@ export function PinnedFoldersView({
           </div>
         )}
 
-        {preview && <PreviewModal file={preview} apiBase={API_BASE} onClose={() => setPreview(null)} />}
+        <MarqueeRect rect={marqueeSelect.marquee} />
+
+        {bulkAction === 'move-cloud' && (
+          <ProviderPickerModal
+            title={`Move ${selected.size} file(s) to another cloud`}
+            confirmLabel="Move"
+            storage={storage}
+            excludeProviderId=""
+            onClose={() => setBulkAction(null)}
+            onConfirm={(destProviderId) => bulkMoveOrCopyToCloud(destProviderId, 'move')}
+          />
+        )}
+        {bulkAction === 'copy-pinned' && (
+          <DestinationPickerModal
+            title={`Add ${selected.size} file(s) to a pinned folder`}
+            confirmLabel="Add"
+            folders={folders}
+            storage={storage}
+            excludeFolderId={open.id}
+            onClose={() => setBulkAction(null)}
+            onConfirm={(destFolderId) => bulkAddToPinnedFolder(destFolderId, 'copy')}
+          />
+        )}
+
+        {preview && preview.source.kind === 'folder' && (
+          <PreviewModal
+            file={preview}
+            apiBase={API_BASE}
+            onClose={() => setPreview(null)}
+            onOpenInApp={() => openInApp(preview.source.kind === 'folder' ? preview.source.folderId : '', preview.key)}
+          />
+        )}
         {showUpload && (
           <UploadModal
             storage={storage}

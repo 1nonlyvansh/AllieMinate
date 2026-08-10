@@ -7,8 +7,12 @@ import { cleanupRemoteCache } from './remoteCache';
 import { startNearbyDiscovery } from './nearbyDiscovery';
 import { purgeOldSyncTrash } from './sync/syncTrash';
 import { recordAutomatedLog } from './logs';
+import { startLocalRecentWatcher } from './localFiles';
+import { emitSyncEvent } from './events';
+import { syncPeerRecentWatchers } from './api/devices';
 
 const SYNC_TRASH_PURGE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const PEER_RECENT_WATCHER_RESYNC_MS = 30 * 1000;
 
 // Without this, ANY unhandled rejection ANYWHERE in the backend (a cloud API call that rejects outside a
 // try/catch, a fire-and-forget promise nobody attached a .catch to) took down the entire Node process —
@@ -48,6 +52,17 @@ async function main(): Promise<void> {
   console.log(`alliminate backend listening on :${config.port} (LAN-reachable)`);
 
   startNearbyDiscovery(config.port);
+
+  // Real-time "This Mac" recent files in the tray (see TrayPanel.tsx's MacRecentStrip) — a native fs
+  // watcher instead of relying purely on the tray's own poll loop.
+  startLocalRecentWatcher(() => emitSyncEvent({ type: 'local-recent-updated', folderId: 'local', payload: null }));
+
+  // Real-time recent files for PAIRED devices too (see devices.ts's syncPeerRecentWatchers) — relays each
+  // Mac/Windows peer's own local-recent-updated push onto this backend's event bus. Interval both retries
+  // any watcher that dropped and picks up newly-paired devices; a bare peer.on('close') alone wouldn't
+  // adopt a device paired after this process started.
+  syncPeerRecentWatchers();
+  setInterval(syncPeerRecentWatchers, PEER_RECENT_WATCHER_RESYNC_MS);
 }
 
 main().catch((err) => {

@@ -3,6 +3,7 @@ import { IconImage } from '../icons';
 import { DropdownMenu } from '../components/DropdownMenu';
 import { usePairedDevices, buildSendMenuItems, SendableFile } from '../lib/sendActions';
 import { NearbyPickerModal } from '../components/NearbyPickerModal';
+import { PreviewModal } from '../components/PreviewModal';
 
 const API_BASE = 'http://localhost:4310';
 
@@ -32,6 +33,12 @@ export function GooglePhotosView() {
   const [nearbyTarget, setNearbyTarget] = useState<{ file: SendableFile; name: string } | null>(null);
   const devices = usePairedDevices();
   const pollTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  // same Finder-style click model as Files/Cloud Services/Pinned Folders/Devices: plain click replaces
+  // selection, Cmd/Ctrl-click toggles, Shift-click selects the range from the last anchor; spacebar
+  // previews the single selected item inline, double-click opens it in its native app.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectAnchor, setSelectAnchor] = useState<string | null>(null);
+  const [previewItem, setPreviewItem] = useState<(MediaItem & { accountId: string }) | null>(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/photos/accounts`)
@@ -140,6 +147,52 @@ export function GooglePhotosView() {
   const items = visibleAccounts.flatMap((a) => (itemsByAccount[a.accountId] ?? []).map((item) => ({ ...item, accountId: a.accountId })));
   items.sort((a, b) => (b.creationTime ?? '').localeCompare(a.creationTime ?? ''));
 
+  function itemKey(item: MediaItem & { accountId: string }): string {
+    return item.accountId + item.id;
+  }
+
+  function selectOnClick(e: React.MouseEvent, item: MediaItem & { accountId: string }) {
+    const key = itemKey(item);
+    if (e.shiftKey && selectAnchor) {
+      const keys = items.map(itemKey);
+      const a = keys.indexOf(selectAnchor);
+      const b = keys.indexOf(key);
+      if (a !== -1 && b !== -1) {
+        const [start, end] = a < b ? [a, b] : [b, a];
+        setSelected(new Set(keys.slice(start, end + 1)));
+        return;
+      }
+    }
+    if (e.metaKey || e.ctrlKey) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    } else {
+      setSelected(new Set([key]));
+    }
+    setSelectAnchor(key);
+  }
+
+  // Spacebar previews the single selected item — image/video only, same convention as every other view.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.code !== 'Space') return;
+      const tag = (document.activeElement?.tagName ?? '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (selected.size !== 1) return;
+      const item = items.find((i) => selected.has(itemKey(i)));
+      if (!item) return;
+      e.preventDefault();
+      setPreviewItem((cur) => (cur ? null : item));
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, items]);
+
   return (
     <section className="view active">
       <div className="view-header">
@@ -201,23 +254,31 @@ export function GooglePhotosView() {
       {items.length > 0 && (
         <div className="folder-grid">
           {items.map((item) => (
-            <div key={item.accountId + item.id} className="folder-card glass-card">
-              <DropdownMenu
-                items={[
-                  { label: 'Open In App', onClick: () => openInApp(item) },
-                  { label: 'Download', onClick: () => downloadItem(item) },
-                  { label: 'Copy', onClick: () => copyItem(item) },
-                  { divider: true },
-                  ...buildSendMenuItems(
-                    devices,
-                    { kind: 'photo', accountId: item.accountId, baseUrl: item.baseUrl },
-                    item.filename,
-                    () => setNearbyTarget({ file: { kind: 'photo', accountId: item.accountId, baseUrl: item.baseUrl }, name: item.filename }),
-                  ),
-                  { divider: true },
-                  { label: 'Remove', danger: true, onClick: () => removeItem(item) },
-                ]}
-              />
+            <div
+              key={item.accountId + item.id}
+              className={`folder-card glass-card${selected.has(itemKey(item)) ? ' selected' : ''}`}
+              onClick={(e) => selectOnClick(e, item)}
+              onDoubleClick={() => openInApp(item)}
+            >
+              <div onClick={(e) => e.stopPropagation()}>
+                <DropdownMenu
+                  items={[
+                    { label: 'Preview', onClick: () => setPreviewItem(item) },
+                    { label: 'Open In App', onClick: () => openInApp(item) },
+                    { label: 'Download', onClick: () => downloadItem(item) },
+                    { label: 'Copy', onClick: () => copyItem(item) },
+                    { divider: true },
+                    ...buildSendMenuItems(
+                      devices,
+                      { kind: 'photo', accountId: item.accountId, baseUrl: item.baseUrl },
+                      item.filename,
+                      () => setNearbyTarget({ file: { kind: 'photo', accountId: item.accountId, baseUrl: item.baseUrl }, name: item.filename }),
+                    ),
+                    { divider: true },
+                    { label: 'Remove', danger: true, onClick: () => removeItem(item) },
+                  ]}
+                />
+              </div>
               <div className="thumb-wrap">
                 {staleItems[item.accountId + item.id] ? (
                   <span className="thumb-fallback type-image">{item.isVideo ? 'Video' : 'Photo'} expired — re-pick</span>
@@ -243,6 +304,24 @@ export function GooglePhotosView() {
 
       {nearbyTarget && (
         <NearbyPickerModal file={nearbyTarget.file} fileName={nearbyTarget.name} onClose={() => setNearbyTarget(null)} />
+      )}
+
+      {previewItem && (
+        <PreviewModal
+          file={{
+            source: { kind: 'photo', accountId: previewItem.accountId, baseUrl: previewItem.baseUrl },
+            key: previewItem.id,
+            name: previewItem.filename,
+            size: 0,
+            provider: 'Google Photos',
+            folderName: '',
+            modifiedAt: previewItem.creationTime ?? '',
+            hash: '',
+          }}
+          apiBase={API_BASE}
+          onClose={() => setPreviewItem(null)}
+          onOpenInApp={() => openInApp(previewItem)}
+        />
       )}
     </section>
   );

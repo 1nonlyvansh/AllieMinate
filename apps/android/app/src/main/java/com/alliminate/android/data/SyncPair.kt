@@ -23,6 +23,15 @@ data class SyncPair(
     // SyncPushWorker falls back to Prefs.primaryMaster for those, which was the only master they could
     // possibly have been created against.
     val masterId: String?,
+    // Universal Sync Folder support. "provider" (default — every pair created before this existed, and
+    // every pair from the ordinary Add Sync Pair flow) pushes to a cloud account folder via
+    // /providers/:id/upload, same as always. "device" pushes straight to a PEER's local-folders shortcut
+    // on the paired Master via /local-folders/:id/upload instead — remoteFolderId holds that shortcut's
+    // id rather than a cloud folder id, and providerId/providerLabel go unused.
+    val targetKind: String = "provider",
+    // Groups this pair with its sibling pairs on other devices, all created from the same Universal Sync
+    // Folder invite — informational only today, mirrors the desktop's own SyncPair.universalSyncId.
+    val universalSyncId: String? = null,
 )
 
 /** One tracked file's last-known-pushed state, keyed by filename within the pair's local folder — enough
@@ -71,6 +80,8 @@ object SyncPairStore {
                 status = o.optString("status").ifBlank { "active" },
                 createdAt = o.getString("createdAt"),
                 masterId = o.optString("masterId").ifBlank { null },
+                targetKind = o.optString("targetKind").ifBlank { "provider" },
+                universalSyncId = o.optString("universalSyncId").ifBlank { null },
             )
         }
     }
@@ -105,6 +116,8 @@ object SyncPairStore {
                     put("status", p.status)
                     put("createdAt", p.createdAt)
                     put("masterId", p.masterId ?: "")
+                    put("targetKind", p.targetKind)
+                    put("universalSyncId", p.universalSyncId ?: "")
                 },
             )
         }

@@ -4,6 +4,8 @@ import path from 'node:path';
 import { listLocalFolders, findLocalFolder, addCustomFolder, removeCustomFolder, isAllowedLocalFolderPath } from '../localFolders';
 import { guessMime } from '../localFiles';
 import { emitSyncEvent } from '../events';
+import { findByToken } from '../pairing';
+import { logTransfer } from '../transferHistory';
 
 // flat, top-level-only per folder — same "not a full disk crawl" tradeoff localFiles.ts's recent-files
 // scan already makes, for the same reason (stays fast even on a Desktop/Downloads with thousands of
@@ -86,6 +88,24 @@ export function registerLocalFolderRoutes(app: FastifyInstance): void {
     return { files, folders, path: subPath };
   });
 
+  // Creates a new subdirectory inside a local folder — the picker's "New Folder" button, so a user can
+  // carve out a fresh nested destination (e.g. Desktop/Personal/Me/Photos) without leaving AllieMinate.
+  app.post<{ Params: { id: string }; Body: { path?: string; name: string } }>('/local-folders/:id/mkdir', async (req, reply) => {
+    const folder = findLocalFolder(req.params.id);
+    if (!folder) return reply.code(404).send({ error: 'folder not found' });
+    const { path: subPath, name } = req.body;
+    if (!name?.trim() || name.includes('/') || name.includes('\\')) return reply.code(400).send({ error: 'invalid folder name' });
+    const parentPath = subPath ? path.join(folder.path, subPath) : folder.path;
+    const newPath = path.join(parentPath, name.trim());
+    if (!isAllowedLocalFolderPath(newPath)) return reply.code(403).send({ error: 'path not allowed' });
+    try {
+      await fsp.mkdir(newPath, { recursive: false });
+      return { ok: true, name: name.trim(), path: subPath ? `${subPath}/${name.trim()}` : name.trim() };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
   app.get<{ Params: { id: string }; Querystring: { key: string } }>('/local-folders/:id/download', async (req, reply) => {
     const folder = findLocalFolder(req.params.id);
     if (!folder) return reply.code(404).send({ error: 'folder not found' });
@@ -93,6 +113,18 @@ export function registerLocalFolderRoutes(app: FastifyInstance): void {
     if (!isAllowedLocalFolderPath(filePath)) return reply.code(403).send({ error: 'path not allowed' });
     try {
       const data = await fsp.readFile(filePath);
+      // A phone pulling a file from this Mac's Explore section is still a real transfer — log it the same
+      // way /inbox/upload (the reverse direction) already does, so it shows up in Transfer History too.
+      const authToken = req.headers.authorization?.replace('Bearer ', '');
+      const requester = authToken ? findByToken(authToken) : undefined;
+      logTransfer({
+        deviceId: requester?.id ?? 'unknown',
+        deviceName: requester?.name ?? 'Unknown device',
+        fileName: path.basename(req.query.key),
+        direction: 'sent',
+        size: data.length,
+        path: filePath,
+      });
       reply.header('Content-Type', 'application/octet-stream');
       return reply.send(data);
     } catch {

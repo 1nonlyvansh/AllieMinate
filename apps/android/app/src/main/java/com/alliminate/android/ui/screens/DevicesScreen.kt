@@ -11,18 +11,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Computer
-import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,12 +44,11 @@ import kotlinx.coroutines.launch
 private const val PING_INTERVAL_MS = 5000L
 
 @Composable
-fun DevicesScreen(onOpenDrawer: () -> Unit) {
+fun DevicesScreen(onOpenDrawer: () -> Unit, onDeviceClick: (PairedMaster) -> Unit = {}) {
     var showPairDialog by remember { mutableStateOf(false) }
     var onlineById by remember { mutableStateOf<Map<String, Boolean?>>(emptyMap()) }
     var sharingActive by remember { mutableStateOf<Boolean?>(null) }
     var refreshTick by remember { mutableStateOf(0) }
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
     val masters = Prefs.pairedMasters
@@ -120,24 +116,6 @@ fun DevicesScreen(onOpenDrawer: () -> Unit) {
         }
     }
 
-    fun unpair(master: PairedMaster) {
-        // Clear locally FIRST, notify the paired PC after — this used to await the network call (up to
-        // CONNECT_TIMEOUT_MS, 6s) before anything visibly changed, so tapping Unpair while that PC was
-        // unreachable (e.g. mid-hotspot-switch) looked like the button just did nothing for several
-        // seconds. The user asked to unpair; this phone can't force the other side to agree regardless of
-        // ordering, so there's no correctness reason to make them wait on it.
-        Prefs.clearPairing(master.id)
-        if (!Prefs.isPaired) LocalServerService.stop(context)
-        PairingStatus.isError.value = false
-        PairingStatus.message.value = "Unpaired from ${master.name}"
-        scope.launch {
-            val removedOnMaster = MasterApi.unpair(master.host, master.token, Prefs.deviceId)
-            if (!removedOnMaster) {
-                PairingStatus.isError.value = true
-                PairingStatus.message.value = "Unpaired here, but couldn't reach ${master.name} — remove it there too from Devices"
-            }
-        }
-    }
 
     ScreenScaffold("Devices", onOpenDrawer) {
         ScreenHeader("Devices", "This phone and the Mac or Windows PCs it's paired with.")
@@ -167,17 +145,14 @@ fun DevicesScreen(onOpenDrawer: () -> Unit) {
         )
 
         masters.forEach { master ->
+            // Unpair now lives in that device's own detail screen (Settings section) — no duplicate
+            // control here, matches "tap the card to see everything about it" being the one entry point.
             DeviceCard(
                 icon = Icons.Filled.Computer,
                 name = master.name,
                 meta = master.platform,
                 online = onlineById[master.id] == true,
-                trailing = {
-                    TextButton(onClick = { unpair(master) }) {
-                        Icon(Icons.Filled.LinkOff, contentDescription = "Unpair", tint = MaterialTheme.colorScheme.error)
-                        Text(" Unpair", color = MaterialTheme.colorScheme.error)
-                    }
-                },
+                onClick = { onDeviceClick(master) },
             )
         }
 
@@ -223,6 +198,7 @@ private fun DeviceCard(
     name: String,
     meta: String,
     online: Boolean,
+    onClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val colors = LocalAllieMinateColors.current
@@ -231,6 +207,7 @@ private fun DeviceCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(colors.surfaceStrong)
+            .let { if (onClick != null) it.clickable(onClick = onClick) else it }
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),

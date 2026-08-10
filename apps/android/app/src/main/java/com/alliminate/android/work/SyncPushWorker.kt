@@ -85,52 +85,92 @@ class SyncPushWorker(context: Context, params: WorkerParameters) : CoroutineWork
             }
         }
 
-        if (pending.isEmpty()) return Result.success()
-
         val doneCount = AtomicInteger(0)
         val anyFailure = AtomicBoolean(false)
-        val semaphore = Semaphore(MAX_CONCURRENT_UPLOADS)
 
         try {
-            coroutineScope {
-                pending.map { item ->
-                    async {
-                        semaphore.withPermit {
-                            val state = stateByPair.getValue(item.pair.id)
-                            val result = runCatching {
-                                item.file.inputStream().use { input ->
-                                    MasterApi.uploadStreamToProvider(item.host, item.token, item.pair.providerId, item.file.name, input, folderId = item.pair.remoteFolderId)
-                                }
-                            }.getOrElse { ApiResult.Err(it.message ?: "upload failed") }
+            if (pending.isNotEmpty()) {
+                val semaphore = Semaphore(MAX_CONCURRENT_UPLOADS)
+                coroutineScope {
+                    pending.map { item ->
+                        async {
+                            semaphore.withPermit {
+                                val state = stateByPair.getValue(item.pair.id)
+                                val result = runCatching {
+                                    item.file.inputStream().use { input ->
+                                        if (item.pair.targetKind == "device") {
+                                            // Universal Sync Folder — pushes straight to the host's local-folders
+                                            // shortcut instead of a cloud provider folder. remoteFolderId is never
+                                            // null for a "device" pair (set at accept time from the invite).
+                                            MasterApi.uploadStreamToLocalFolder(item.host, item.token, item.pair.remoteFolderId!!, item.file.name, input)
+                                        } else {
+                                            MasterApi.uploadStreamToProvider(item.host, item.token, item.pair.providerId, item.file.name, input, folderId = item.pair.remoteFolderId)
+                                        }
+                                    }
+                                }.getOrElse { ApiResult.Err(it.message ?: "upload failed") }
 
-                            when (result) {
-                                is ApiResult.Ok -> {
-                                    state[item.file.name] = SyncFileRecord(
-                                        size = item.file.length(),
-                                        modifiedAt = item.file.lastModified(),
-                                        lastSyncedAt = System.currentTimeMillis(),
-                                        status = "synced",
-                                    )
-                                    SyncActivityStore.record(item.pair.id, "Synced ${item.file.name}")
+                                when (result) {
+                                    is ApiResult.Ok -> {
+                                        state[item.file.name] = SyncFileRecord(
+                                            size = item.file.length(),
+                                            modifiedAt = item.file.lastModified(),
+                                            lastSyncedAt = System.currentTimeMillis(),
+                                            status = "synced",
+                                        )
+                                        SyncActivityStore.record(item.pair.id, "Synced ${item.file.name}")
+                                    }
+                                    is ApiResult.Err -> {
+                                        anyFailure.set(true)
+                                        state[item.file.name] = SyncFileRecord(
+                                            size = item.file.length(),
+                                            modifiedAt = item.file.lastModified(),
+                                            lastSyncedAt = item.record?.lastSyncedAt ?: 0L,
+                                            status = "error",
+                                            lastError = result.message,
+                                        )
+                                        SyncActivityStore.record(item.pair.id, "Failed to sync ${item.file.name}: ${result.message}", isError = true)
+                                    }
                                 }
-                                is ApiResult.Err -> {
-                                    anyFailure.set(true)
-                                    state[item.file.name] = SyncFileRecord(
-                                        size = item.file.length(),
-                                        modifiedAt = item.file.lastModified(),
-                                        lastSyncedAt = item.record?.lastSyncedAt ?: 0L,
-                                        status = "error",
-                                        lastError = result.message,
-                                    )
-                                    SyncActivityStore.record(item.pair.id, "Failed to sync ${item.file.name}: ${result.message}", isError = true)
-                                }
+
+                                val done = doneCount.incrementAndGet()
+                                TransferNotifications.showSyncProgress(applicationContext, item.pair.name, done, pending.size)
                             }
-
-                            val done = doneCount.incrementAndGet()
-                            TransferNotifications.showSyncProgress(applicationContext, item.pair.name, done, pending.size)
                         }
+                    }.awaitAll()
+                }
+            }
+
+            // Universal Sync's other half — a plain "Add Sync Pair" push is deliberately one-way (see class
+            // doc), but a Universal Sync Folder is meant to be the same shared folder the host and every
+            // other spoke (Windows already gets this via its own two-way reconciliation engine) all see —
+            // without this, files the HOST creates never reach the phone at all, only phone→host ever works.
+            for (pair in activePairs) {
+                if (pair.targetKind != "device" || pair.universalSyncId == null) continue
+                val remoteFolderId = pair.remoteFolderId ?: continue
+                val master = Prefs.masterById(pair.masterId) ?: Prefs.primaryMaster ?: continue
+                val dir = File(pair.localPath)
+                if (!dir.isDirectory) continue
+                val state = stateByPair.getValue(pair.id)
+                val remote = MasterApi.localFolderFiles(master.host, master.token, remoteFolderId)
+                if (remote !is ApiResult.Ok) continue
+                for (remoteFile in remote.value) {
+                    if (isIgnored(remoteFile.displayName)) continue
+                    val localFile = File(dir, remoteFile.displayName)
+                    if (localFile.exists() && localFile.length() == remoteFile.size) continue // already have it
+                    val downloaded = runCatching {
+                        MasterApi.downloadLocalFolderFile(master.host, master.token, remoteFolderId, remoteFile.path)
+                    }.getOrElse { ApiResult.Err(it.message ?: "download failed") }
+                    if (downloaded is ApiResult.Ok) {
+                        localFile.writeBytes(downloaded.value)
+                        state[remoteFile.displayName] = SyncFileRecord(
+                            size = localFile.length(),
+                            modifiedAt = localFile.lastModified(),
+                            lastSyncedAt = System.currentTimeMillis(),
+                            status = "synced",
+                        )
+                        SyncActivityStore.record(pair.id, "Received ${remoteFile.displayName} from ${master.name}")
                     }
-                }.awaitAll()
+                }
             }
         } finally {
             stateByPair.forEach { (pairId, state) -> SyncFileStateStore.save(pairId, state) }

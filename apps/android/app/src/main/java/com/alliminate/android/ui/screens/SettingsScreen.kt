@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Folder
@@ -60,7 +61,7 @@ import com.alliminate.android.ui.theme.LocalAllieMinateColors
 import com.alliminate.android.work.CameraBackupScheduler
 
 @Composable
-fun SettingsScreen(onOpenDrawer: () -> Unit) {
+fun SettingsScreen(onOpenDrawer: () -> Unit, onOpenAbout: () -> Unit) {
     val context = LocalContext.current
 
     ScreenScaffold("Settings", onOpenDrawer) {
@@ -95,6 +96,13 @@ fun SettingsScreen(onOpenDrawer: () -> Unit) {
 
         SettingsSection("About") {
             SettingsRow(icon = Icons.Filled.Info, title = "Version", subtitle = "AllieMinate for Android 0.1.0 (foundation build)")
+            SettingsRow(
+                icon = Icons.Filled.Info,
+                title = "About AllieMinate",
+                subtitle = "Features, use cases, developer & support links",
+                trailing = { Icon(Icons.Filled.ChevronRight, contentDescription = null) },
+                onClick = onOpenAbout,
+            )
         }
     }
 }

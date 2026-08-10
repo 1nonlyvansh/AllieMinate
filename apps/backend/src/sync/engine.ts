@@ -24,7 +24,7 @@ function resolveSyncTarget(folder: FolderConfig, backend: StorageBackend | undef
   if (!folder.syncDeviceId || !folder.syncDeviceFolderId) return null;
   const peer = loadPairedDevices().find((d) => d.id === folder.syncDeviceId);
   if (!peer) return null;
-  return new DeviceSyncTarget(peer, folder.syncDeviceFolderId, peer.platform === 'android', folder.syncDeviceFolderKind ?? 'folder');
+  return new DeviceSyncTarget(peer, folder.syncDeviceFolderId, peer.platform === 'android', folder.syncDeviceFolderKind ?? 'folder', folder.remotePrefix ?? '');
 }
 
 // One interval per folder, tracked so it can actually be torn down again — without this, disabling

@@ -12,6 +12,10 @@ export interface PairedDevice {
   host: string;
   token: string;
   pairedAt: string;
+  // Mac/Windows-only device-card setting (the phone side has its own equivalent per-master toggle,
+  // managed from the phone, not here — see PairedMaster.universalClipboardEnabled on Android). Inert
+  // until the Universal Clipboard feature itself lands; this just persists the user's choice.
+  universalClipboardEnabled?: boolean;
 }
 
 export function loadPairedDevices(): PairedDevice[] {

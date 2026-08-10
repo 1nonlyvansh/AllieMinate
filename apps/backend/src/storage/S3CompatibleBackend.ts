@@ -5,6 +5,7 @@ import {
   DeleteObjectCommand,
   ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
+import type { Readable } from 'node:stream';
 import type { FileEntry, FolderNode } from '@alliminate/shared';
 import type { StorageBackend } from './StorageBackend';
 import type { S3CompatConfig } from '../config';
@@ -43,6 +44,17 @@ export class S3CompatibleBackend implements StorageBackend {
     return Buffer.concat(chunks);
   }
 
+  /** GetObjectCommand's response body IS already a real Node Readable under the hood (the SDK's Node
+   * runtime backs it with the raw HTTP response stream) — get() above just throws that away by buffering
+   * it into chunks first. Handing it back directly is the whole fix: no behavior change, just skips the
+   * unnecessary buffer-then-reassemble step. */
+  async getStream(key: string): Promise<Readable> {
+    const res = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    return res.Body as Readable;
+  }
+
   async delete(key: string): Promise<void> {
     await this.client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
@@ -50,11 +62,20 @@ export class S3CompatibleBackend implements StorageBackend {
   }
 
   async list(prefix: string): Promise<FileEntry[]> {
-    const res = await this.client.send(
-      new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix }),
-    );
+    // ListObjectsV2 caps at 1000 keys per call and needs ContinuationToken to see the rest — a folder with
+    // more than 1000 objects under this prefix would otherwise silently look "done" after page 1, and the
+    // sync engine would read every object past that cutoff as deleted and delete the local copies to match.
+    const objects: { Key?: string; Size?: number; ETag?: string; LastModified?: Date }[] = [];
+    let ContinuationToken: string | undefined;
+    do {
+      const res = await this.client.send(
+        new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix, ContinuationToken }),
+      );
+      objects.push(...(res.Contents ?? []));
+      ContinuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
+    } while (ContinuationToken);
 
-    return (res.Contents ?? []).map((obj) => ({
+    return objects.map((obj) => ({
       path: obj.Key ?? '',
       size: obj.Size ?? 0,
       hash: (obj.ETag ?? '').replace(/"/g, ''),

@@ -5,7 +5,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { createWindow as createMacWindow } from './platform/mac/window';
 import { createWindow as createWindowsWindow } from './platform/windows/window';
-import { createTray } from './tray';
+import { createTray, openDropPanelFor } from './tray';
 import { isAppLockEnabled, setAppLockEnabled, verifyPin, canUseTouchID, tryTouchID } from './security';
 import { connectUsbTunnel, disconnectUsbTunnel, launchPairDeepLink } from './adb';
 import { composeMailWithAttachments } from './mail';
@@ -25,6 +25,44 @@ const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
 }
+
+// macOS Share Extension handoff — "Share to Connected Devices" and "Add to Cloud Service" (see
+// macos-share-extension/) can't hand a file straight to this app process-to-process (a share extension
+// runs in its own short-lived process with no IPC channel back to us), so it writes the picked file
+// paths to a JSON file next to the app's own data dir, then opens this custom-scheme URL to wake/focus
+// this app and tell it which of the two the user picked. Registered before whenReady so a COLD launch
+// via the extension (app wasn't already running) still gets the open-url event macOS fires for it.
+app.setAsDefaultProtocolClient('alliminate');
+
+const SHARE_HANDOFF_PATH = path.join(app.getPath('userData'), 'share-handoff.json');
+// open-url can fire before createTray() has run yet (a cold launch) — openDropPanelFor needs a live
+// tray to position its panel against, so a handoff that arrives too early waits for whenReady to finish.
+let pendingShareUrl: string | null = null;
+
+function handleShareExtensionUrl(url: string): void {
+  let kind: 'cloud' | 'device' | null = null;
+  try {
+    kind = new URL(url).searchParams.get('kind') as 'cloud' | 'device' | null;
+  } catch {
+    return;
+  }
+  if (kind !== 'cloud' && kind !== 'device') return;
+  let paths: string[];
+  try {
+    const handoff = JSON.parse(fs.readFileSync(SHARE_HANDOFF_PATH, 'utf-8'));
+    paths = Array.isArray(handoff.paths) ? handoff.paths.filter((p: unknown) => typeof p === 'string') : [];
+  } catch {
+    return; // extension failed to write the handoff, or it's stale/missing — nothing to share
+  }
+  if (paths.length === 0) return;
+  openDropPanelFor(paths, kind);
+}
+
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  if (app.isReady()) handleShareExtensionUrl(url);
+  else pendingShareUrl = url;
+});
 
 const BACKEND_PORT = 4310;
 const BACKEND_RESTART_MAX_DELAY_MS = 30_000;
@@ -62,16 +100,71 @@ function isPortOpen(port: number): Promise<boolean> {
   });
 }
 
+// Every piece of runtime state the backend writes (accounts.json, devices.json, folders.json,
+// username.json, syncPairs.json, .env — the refresh tokens, everything) used to live INSIDE this same
+// packaged .app bundle, at process.resourcesPath/backend/ and process.resourcesPath/../.env. That's the
+// bundle a fresh install replaces wholesale — Finder/Explorer deletes the whole old .app and copies in the
+// new one, which used to mean every paired device, linked cloud account, pinned/sync folder, and OAuth
+// token was gone the moment a user updated to a newer build. Real data loss on update, confirmed, not
+// hypothetical. Fixed by moving all of it to app.getPath('userData') (outside the bundle, survives a
+// reinstall) — see paths.ts's ALLIMINATE_DATA_DIR. This one-time migration is what carries an EXISTING
+// install's data across to the new location the first time a build with this fix runs: without it, moving
+// where the backend looks would just mean the new location starts out empty and looks like the old data
+// vanished, even though — on THIS SAME machine, before any reinstall — it's still sitting right there at
+// the old bundle-relative path. A version genuinely reinstalled via a fresh Finder "Replace" has already
+// lost the old bundle's contents before this code ever runs; there's no way to recover that after the fact,
+// which is exactly why this fix needs to ship BEFORE that replace happens, not after.
+function migrateLegacyDataDir(newDir: string): void {
+  logToFile(`migrateLegacyDataDir: start, isPackaged=${app.isPackaged}, newDir=${newDir}`);
+  // Not app.isPackaged: this build's Electron shell is never actually re-packaged (default_app.asar and
+  // the "Electron" executable name are both still present in Contents/Resources), so Electron's own
+  // isPackaged heuristic reports false even for a real installed .app — it's not a reliable dev/prod signal
+  // here. legacyBackendDir's existence is: a real install has process.resourcesPath/backend, a dev run
+  // (resourcesPath inside node_modules/electron's own Resources) never does.
+  fs.mkdirSync(newDir, { recursive: true }); // always, even a genuinely fresh install with nothing to migrate — the
+  // backend's very first write (getDeviceIdentity's device.json) throws ENOENT if this dir doesn't exist yet.
+
+  const alreadyMigrated = fs.existsSync(path.join(newDir, 'devices.json')) || fs.existsSync(path.join(newDir, 'accounts.json'));
+  logToFile(`migrateLegacyDataDir: alreadyMigrated=${alreadyMigrated}`);
+  if (alreadyMigrated) return;
+
+  const legacyBackendDir = path.join(process.resourcesPath, 'backend');
+  const legacyEnvPath = path.join(process.resourcesPath, '..', '.env');
+  logToFile(`migrateLegacyDataDir: legacyBackendDir=${legacyBackendDir} exists=${fs.existsSync(legacyBackendDir)}, legacyEnvPath=${legacyEnvPath} exists=${fs.existsSync(legacyEnvPath)}`);
+  try {
+    if (fs.existsSync(legacyBackendDir)) {
+      const entries = fs.readdirSync(legacyBackendDir, { withFileTypes: true });
+      logToFile(`migrateLegacyDataDir: legacyBackendDir entries=${entries.map((e) => e.name).join(', ')}`);
+      for (const entry of entries) {
+        // dist/node_modules are shipped code, not user data — never part of what gets carried over.
+        if (entry.name === 'dist' || entry.name === 'node_modules') continue;
+        fs.cpSync(path.join(legacyBackendDir, entry.name), path.join(newDir, entry.name), { recursive: true });
+      }
+      logToFile(`migrated legacy runtime data from ${legacyBackendDir} to ${newDir}`);
+    }
+    if (fs.existsSync(legacyEnvPath)) {
+      fs.copyFileSync(legacyEnvPath, path.join(newDir, '.env'));
+      logToFile(`migrated legacy .env from ${legacyEnvPath} to ${newDir}`);
+    }
+  } catch (err) {
+    logToFile(`legacy data migration failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 function spawnBackend(): void {
   const backendEntry = app.isPackaged
     ? path.join(process.resourcesPath, 'backend', 'dist', 'index.js')
     : path.join(__dirname, '../../../backend/dist/index.js');
+
+  const dataDir = path.join(app.getPath('userData'), 'backend-data');
+  migrateLegacyDataDir(dataDir);
 
   const logStream = fs.createWriteStream(logPath, { flags: 'a' });
   backendProcess = spawn(process.execPath, [backendEntry], {
     env: {
       ...process.env,
       ELECTRON_RUN_AS_NODE: '1',
+      ALLIMINATE_DATA_DIR: dataDir,
       // the backend is a plain Node child process with no Electron runtime, so it can't call
       // app.getPath() itself for the local-folder-browsing feature's known folders — resolve them here
       // (correct even if the user relocated one via the registry/Finder) and hand them down as env vars.
@@ -196,7 +289,19 @@ ipcMain.handle('security:tryTouchID', () => tryTouchID());
 
 ipcMain.handle('launchAtLogin:isEnabled', () => app.getLoginItemSettings().openAtLogin);
 ipcMain.handle('launchAtLogin:setEnabled', (_e, enabled: boolean) => {
-  app.setLoginItemSettings({ openAtLogin: enabled });
+  // A packaged app (Mac's own build-app.sh output, or an eventual Windows equivalent) needs nothing extra
+  // here — process.execPath already points at a self-contained bundle that loads its own app content by
+  // Electron's normal convention. An UNPACKAGED dev run (bare `electron.exe path-to-app`, which is how
+  // this app currently runs on Windows — no build-app.sh equivalent exists there yet) is different:
+  // process.execPath is just electron.exe with no idea which app to load, so a login item registered
+  // without the app path launches Electron's own default template window instead of AllieMinate. Passing
+  // the app directory as an explicit arg is exactly what the manual `electron.exe path-to-app` invocation
+  // already does — this just makes Windows' boot-time launch do the same thing.
+  if (!app.isPackaged) {
+    app.setLoginItemSettings({ openAtLogin: enabled, path: process.execPath, args: [app.getAppPath()] });
+  } else {
+    app.setLoginItemSettings({ openAtLogin: enabled });
+  }
 });
 
 ipcMain.handle('usb:connect', () => connectUsbTunnel());
@@ -229,6 +334,14 @@ ipcMain.handle('file:copyLocal', (_e, filePath: string) => {
   return { ok: true };
 });
 
+// Universal Clipboard — the renderer polls readText() and calls writeText() when it sees a real change
+// (its own or a peer's); the actual OS clipboard access has to happen here since the backend is a plain
+// Node child process with no Electron API (see clipboard.ts's own comment on that).
+ipcMain.handle('clipboard:readText', () => clipboard.readText());
+ipcMain.handle('clipboard:writeText', (_e, text: string) => {
+  clipboard.writeText(text);
+});
+
 app.whenReady().then(async () => {
   // nothing in this app ever calls app.dock.hide() — the Dock icon (and macOS's own "running" indicator
   // dot under it) should always be present regardless of whether the main window is open or the app is
@@ -238,6 +351,10 @@ app.whenReady().then(async () => {
   await ensureBackend();
   createMainWindow();
   createTray();
+  if (pendingShareUrl) {
+    handleShareExtensionUrl(pendingShareUrl);
+    pendingShareUrl = null;
+  }
 });
 
 // this app keeps running via the tray after the main window closes on every platform (see spawnBackend's

@@ -1,0 +1,53 @@
+import Foundation
+import AppKit
+
+// One shared implementation, templated at build time for both extensions — the only difference between
+// "Share to Connected Devices" and "Add to Cloud Service" is which `kind` query param they hand the main
+// app, so it opens the right side of the tray drop panel (see tray.ts's openDropPanelFor).
+// Info.plist's NSExtensionPrincipalClass is a bare "ShareRequestHandler" string, looked up via the ObjC
+// runtime — without this explicit @objc(...) name, a plain Swift class registers under its
+// module-mangled name instead (e.g. "main.ShareRequestHandler" or worse), and pluginkit's lookup by the
+// bare string would silently fail to instantiate it.
+@objc(ShareRequestHandler)
+class ShareRequestHandler: NSObject, NSExtensionRequestHandling {
+    func beginRequest(with context: NSExtensionContext) {
+        var paths: [String] = []
+        let group = DispatchGroup()
+
+        for item in (context.inputItems as? [NSExtensionItem]) ?? [] {
+            for provider in item.attachments ?? [] {
+                if provider.hasItemConformingToTypeIdentifier("public.file-url") {
+                    group.enter()
+                    provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { data, _ in
+                        if let url = data as? URL {
+                            paths.append(url.path)
+                        } else if let urlData = data as? Data, let url = URL(dataRepresentation: urlData, relativeTo: nil) {
+                            paths.append(url.path)
+                        }
+                        group.leave()
+                    }
+                }
+            }
+        }
+
+        group.notify(queue: .main) {
+            self.handOffAndLaunch(paths: paths)
+            context.completeRequest(returningItems: nil, completionHandler: nil)
+        }
+    }
+
+    // The extension process is short-lived and has no IPC channel back to the main Electron app — write
+    // the picked file paths to a JSON handoff file next to the app's own userData dir, then wake/focus the
+    // app via its custom URL scheme (registered in main/index.ts). The app reads this same file back.
+    private func handOffAndLaunch(paths: [String]) {
+        let dict: [String: Any] = ["paths": paths]
+        guard let data = try? JSONSerialization.data(withJSONObject: dict) else { return }
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let handoffURL = home.appendingPathComponent("Library/Application Support/alliminate-desktop-app/share-handoff.json")
+        try? FileManager.default.createDirectory(at: handoffURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? data.write(to: handoffURL)
+        if let launchURL = URL(string: "alliminate://share-extension?kind=__KIND__") {
+            NSWorkspace.shared.open(launchURL)
+        }
+    }
+}

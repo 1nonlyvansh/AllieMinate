@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { ProviderStorage } from '@alliminate/shared';
 import { baseProviderOf } from '@alliminate/shared';
 import type { FolderMeta, ActivityEntry, FilesByFolder, PairedDeviceInfo, ClipboardEntry } from '../lib/types';
-import { formatBytes, timeAgo } from '../lib/format';
+import { formatBytes, timeAgo, broadCategorize } from '../lib/format';
 import { IconMac, IconWindows, IconPhone, IconDevices, IconAdd, IconFolder, IconSearch } from '../icons';
 import { isWindows, osName, thisDeviceLabel } from '../lib/platformLabels';
 import { Thumbnail } from '../components/Thumbnail';
@@ -68,6 +68,8 @@ export function OverviewView({
   const [paired, setPaired] = useState<PairedDeviceInfo[]>([]);
   const [preview, setPreview] = useState<PreviewTarget | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectAnchor, setSelectAnchor] = useState<string | null>(null);
   const [showAddFolder, setShowAddFolder] = useState(false);
   const [nearbyTarget, setNearbyTarget] = useState<{ file: SendableFile; name: string } | null>(null);
   const devices = usePairedDevices();
@@ -137,6 +139,10 @@ export function OverviewView({
     return allFiles.filter((f) => f.path.toLowerCase().includes(q)).slice(0, 60);
   }, [allFiles, searchQuery]);
 
+  type RecentFile = { folderId: string; path: string; size: number; modifiedAt: string; provider: string; folderName: string; hash: string; thumbnailUrl?: string; mimeType?: string };
+
+  const recentUid = (f: { folderId: string; path: string }) => f.folderId + f.path;
+
   function openRecentFile(f: { folderId: string; path: string; size: number; modifiedAt: string; provider: string; folderName: string; hash: string }) {
     setPreview({
       source: { kind: 'folder', folderId: f.folderId },
@@ -150,7 +156,40 @@ export function OverviewView({
     });
   }
 
-  type RecentFile = { folderId: string; path: string; size: number; modifiedAt: string; provider: string; folderName: string; hash: string; thumbnailUrl?: string; mimeType?: string };
+  async function openInAppRecent(f: RecentFile) {
+    await fetch(`${API_BASE}/files/open`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folderId: f.folderId, key: f.path, mimeType: f.mimeType }),
+    });
+  }
+
+  // Finder-style click selection: plain click selects ONLY this card (replaces whatever was selected),
+  // Cmd/Ctrl-click toggles it into/out of the existing selection, Shift-click selects the contiguous
+  // range from the last plain/cmd click (selectAnchor) through this card, within the currently active list.
+  function selectOnClick(e: React.MouseEvent, f: RecentFile, list: RecentFile[]) {
+    const uid = recentUid(f);
+    if (e.shiftKey && selectAnchor) {
+      const ids = list.map(recentUid);
+      const a = ids.indexOf(selectAnchor);
+      const b = ids.indexOf(uid);
+      if (a !== -1 && b !== -1) {
+        const [start, end] = a < b ? [a, b] : [b, a];
+        setSelected(new Set(ids.slice(start, end + 1)));
+        return;
+      }
+    }
+    if (e.metaKey || e.ctrlKey) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.has(uid) ? next.delete(uid) : next.add(uid);
+        return next;
+      });
+    } else {
+      setSelected(new Set([uid]));
+    }
+    setSelectAnchor(uid);
+  }
 
   async function downloadRecentFile(f: RecentFile) {
     const res = await fetch(`${API_BASE}/folders/${f.folderId}/download?key=${encodeURIComponent(f.path)}`);
@@ -177,6 +216,26 @@ export function OverviewView({
       ...buildSendMenuItems(devices, sendFile, name, () => setNearbyTarget({ file: sendFile, name })),
     ];
   }
+
+  // Spacebar previews the single selected card — image/video only — within whichever list is active
+  // (Search Results while a query is typed, Recent Files otherwise; the two blocks are mutually exclusive).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.code !== 'Space') return;
+      const tag = (document.activeElement?.tagName ?? '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (selected.size !== 1) return;
+      const list = searchQuery.trim() ? searchResults : recentFiles;
+      const f = list.find((r) => recentUid(r) === Array.from(selected)[0]);
+      if (!f) return;
+      const cat = broadCategorize(f.path, f.mimeType);
+      if (cat !== 'image' && cat !== 'video') return;
+      e.preventDefault();
+      openRecentFile(f);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected, searchQuery, searchResults, recentFiles]);
 
   function openActivityFile(a: ActivityEntry) {
     if (!a.folderId || !a.fileKey) return;
@@ -221,7 +280,12 @@ export function OverviewView({
           ) : (
             <div className="recent-grid">
               {searchResults.map((f) => (
-                <div key={f.folderId + f.path} className="folder-card recent-card glass-card" onClick={() => openRecentFile(f)}>
+                <div
+                  key={f.folderId + f.path}
+                  className={`folder-card recent-card glass-card${selected.has(recentUid(f)) ? ' selected' : ''}`}
+                  onClick={(e) => selectOnClick(e, f, searchResults)}
+                  onDoubleClick={() => openInAppRecent(f)}
+                >
                   <DropdownMenu items={recentFileMenuItems(f)} />
                   <Thumbnail folderId={f.folderId} fileKey={f.path} name={f.path.split('/').pop() ?? f.path} size={f.size} thumbnailUrl={f.thumbnailUrl} />
                   <div className="folder-name">{f.path.split('/').pop()}</div>
@@ -354,7 +418,12 @@ export function OverviewView({
           ) : (
             <div className="recent-grid">
               {recentFiles.map((f) => (
-                <div key={f.folderId + f.path} className="folder-card recent-card glass-card" onClick={() => openRecentFile(f)}>
+                <div
+                  key={f.folderId + f.path}
+                  className={`folder-card recent-card glass-card${selected.has(recentUid(f)) ? ' selected' : ''}`}
+                  onClick={(e) => selectOnClick(e, f, recentFiles)}
+                  onDoubleClick={() => openInAppRecent(f)}
+                >
                   <DropdownMenu items={recentFileMenuItems(f)} />
                   <Thumbnail folderId={f.folderId} fileKey={f.path} name={f.path.split('/').pop() ?? f.path} size={f.size} thumbnailUrl={f.thumbnailUrl} />
                   <div className="folder-name">{f.path.split('/').pop()}</div>
@@ -386,7 +455,14 @@ export function OverviewView({
         </>
       )}
 
-      {preview && <PreviewModal file={preview} apiBase={API_BASE} onClose={() => setPreview(null)} />}
+      {preview && preview.source.kind === 'folder' && (
+        <PreviewModal
+          file={preview}
+          apiBase={API_BASE}
+          onClose={() => setPreview(null)}
+          onOpenInApp={() => openInAppRecent({ folderId: preview.source.folderId, path: preview.key, size: preview.size, modifiedAt: preview.modifiedAt, provider: preview.provider, folderName: preview.folderName, hash: preview.hash })}
+        />
+      )}
 
       {nearbyTarget && (
         <NearbyPickerModal file={nearbyTarget.file} fileName={nearbyTarget.name} onClose={() => setNearbyTarget(null)} />

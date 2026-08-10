@@ -425,6 +425,29 @@ export async function reconcileFolder(folder: FolderConfig, target: SyncTarget):
     remoteByRelPath.set(rel, entry);
   }
 
+  // Safety net against a broken/incomplete listing on EITHER side. A truncated or wrongly-empty listing
+  // (missing pagination, a swallowed API error, a stale/expired token that still returns 200) looks
+  // identical to "the user deleted most of this folder" from here — and the delete-propagation branches in
+  // reconcileOne would then honor that phantom delete by wiping the other side's copies. Real bulk
+  // deletions by a user are rare and deliberate; a side that goes from "mostly synced" to "mostly missing"
+  // in one pass is far more likely a broken listing. Small folders (<=3 tracked files) are exempt — not
+  // worth guarding, and a real small-folder cleanup shouldn't be blocked.
+  const trackedPaths = Object.keys(state);
+  if (trackedPaths.length > 3) {
+    const goneLocal = trackedPaths.filter((p) => state[p].localModifiedAt !== undefined && !localFiles.has(p)).length;
+    const goneRemote = trackedPaths.filter((p) => state[p].remoteModifiedAt !== undefined && !remoteByRelPath.has(p)).length;
+    const localGoneFrac = goneLocal / trackedPaths.length;
+    const remoteGoneFrac = goneRemote / trackedPaths.length;
+    if ((goneLocal > 3 && localGoneFrac > 0.5) || (goneRemote > 3 && remoteGoneFrac > 0.5)) {
+      const side = remoteGoneFrac >= localGoneFrac ? 'remote' : 'local';
+      const count = side === 'remote' ? goneRemote : goneLocal;
+      const msg = `auto-sync paused for "${folder.name}" — the ${side} side suddenly looks mostly empty (${count}/${trackedPaths.length} previously-synced files missing this pass). This usually means a listing failed rather than a real mass delete, so nothing was touched. Check the connection/account and try again.`;
+      console.error(msg);
+      emitSyncEvent({ type: 'error', folderId: folder.id, payload: { message: msg } });
+      return;
+    }
+  }
+
   // Preflight, once per pass rather than per file — a large incoming batch (pulling down a folder that
   // suddenly has a lot of new remote content) could fill the disk before any individual file-level check
   // would catch it, and a large outgoing batch could blow through the account's quota mid-pass leaving a

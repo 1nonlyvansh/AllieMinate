@@ -124,6 +124,7 @@ export function CreateUniversalSyncModal({
           direction: 'two-way',
           createInCloud,
           createNew: mode === 'new',
+          isUniversalSync: true,
         }),
       });
       const pairData = await pairRes.json().catch(() => ({}));

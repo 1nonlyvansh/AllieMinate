@@ -84,6 +84,9 @@ export interface ProviderStorage {
   totalBytes: number;
   /** connected account email, shown when multiple accounts share a base provider */
   label?: string;
+  /** set when the last usage lookup failed (e.g. a revoked/expired OAuth grant — "invalid_grant") — the
+   * account still shows up in the list instead of silently vanishing, with usedBytes/totalBytes at 0. */
+  error?: string;
 }
 
 export interface SyncEvent {
@@ -93,9 +96,13 @@ export interface SyncEvent {
     | 'conflict'
     | 'error'
     | 'storage-updated'
+    | 'device-status-updated'
+    | 'local-recent-updated'
+    | 'device-recent-updated'
     | 'nearby-request'
     | 'unlock-request'
-    | 'universal-sync-invite';
+    | 'universal-sync-invite'
+    | 'clipboard-updated';
   folderId: string;
   payload: unknown;
 }

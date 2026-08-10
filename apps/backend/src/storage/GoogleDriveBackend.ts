@@ -18,6 +18,21 @@ function trashKeyName(key: string): string | null {
   return key.startsWith('_trash/') ? key.slice('_trash/'.length) : null;
 }
 
+// The two fixed top-level segments every NEW sync/Universal-Sync remotePrefix is generated under (see
+// server.ts's POST /folders and syncPairs.ts's POST /sync/pairs) — real nested Drive folders from here on.
+// Any OTHER key/prefix — every folder created before this migration, an opaque slug like "wallpapers-a1b2c3"
+// with no "Sync/"/"Universal Sync/" segment — is a pre-existing folder that still stores its files the old
+// way: one flat literal filename equal to the whole key, sitting directly in the managed root. Never
+// migrated in place (that would mean silently moving a user's existing files mid-flight); this flag just
+// picks which of the two storage shapes a given key/prefix already lives under, on both the read and write
+// side, so an old folder keeps working exactly as it always has forever, and only brand-new folders get the
+// real nested treatment. Drive filenames can never contain "/", so this check can never misfire on a
+// coincidental prefix collision with a real single-segment Drive filename.
+const NEW_SCHEME_ROOTS = ['Sync/', 'Universal Sync/'];
+function isNewSchemeKey(keyOrPrefix: string): boolean {
+  return NEW_SCHEME_ROOTS.some((root) => keyOrPrefix.startsWith(root));
+}
+
 function bufferToStream(buffer: Buffer): Readable {
   const stream = new Readable();
   stream.push(buffer);
@@ -29,6 +44,16 @@ export class GoogleDriveBackend implements StorageBackend {
   private drive: drive_v3.Drive;
   private rootFolderId: string | null = null;
   private trashFolderId: string | null = null;
+  // findFileId() otherwise costs a real files.list round-trip on EVERY get()/delete() — including every
+  // inline preview open — before the actual content request even starts. Safe to cache: put() on an
+  // existing key overwrites in place via files.update (same fileId survives), so the only place a cached
+  // id actually goes stale is delete(), which clears its own entry below.
+  private fileIdCache = new Map<string, string>();
+  // relative folder path ("" = the managed root itself) -> its real Drive folder id. A key like
+  // "Sync/Personal/college/marksheet.pdf" now maps to real nested Drive folders (Sync/Personal/college)
+  // instead of one flat file literally named that whole string — this cache is what keeps resolving/
+  // creating that folder chain to a single lookup per segment instead of one per put()/get()/delete() call.
+  private folderPathCache = new Map<string, string>();
 
   constructor(cfg: GoogleDriveConfig) {
     const auth = new google.auth.OAuth2(cfg.clientId, cfg.clientSecret);
@@ -93,19 +118,83 @@ export class GoogleDriveBackend implements StorageBackend {
     return res.data.files?.[0]?.id ?? null;
   }
 
-  private async findFileIdInRoot(key: string): Promise<string | null> {
-    const trashName = trashKeyName(key);
-    if (trashName) return this.findFileIdInFolder(await this.getTrashFolderId(), trashName);
-    return this.findFileIdInFolder(await this.getRootFolderId(), key);
+  /** Resolves a relative folder path ("" = the managed root itself, "Sync/Personal" = a real two-level
+   * nested folder under it) to its Drive folder id, walking/caching one segment at a time. `create` decides
+   * what a missing segment means: `true` creates it (a put() needs somewhere to put the file), `false`
+   * treats it as "genuinely nothing here yet" and returns null (a get()/list() has nothing to find or
+   * create). Drive names can't contain "/" at all, so any key reaching this with a slash in it is always
+   * one of AllieMinate's own synthetic multi-segment paths, never a real ambiguous Drive filename. */
+  private async resolveFolderId(relDir: string, create: boolean): Promise<string | null> {
+    if (!relDir) return this.getRootFolderId();
+    const cached = this.folderPathCache.get(relDir);
+    if (cached) return cached;
+
+    let parentId = await this.getRootFolderId();
+    let builtPath = '';
+    for (const segment of relDir.split('/').filter(Boolean)) {
+      builtPath = builtPath ? `${builtPath}/${segment}` : segment;
+      const cachedSegment = this.folderPathCache.get(builtPath);
+      if (cachedSegment) {
+        parentId = cachedSegment;
+        continue;
+      }
+      const escaped = segment.replace(/'/g, "\\'");
+      const res = await this.drive.files.list({
+        q: `name = '${escaped}' and mimeType = 'application/vnd.google-apps.folder' and '${parentId}' in parents and trashed = false`,
+        fields: 'files(id)',
+        spaces: 'drive',
+      });
+      let id = res.data.files?.[0]?.id;
+      if (!id) {
+        if (!create) return null;
+        const created = await this.drive.files.create({
+          requestBody: { name: segment, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] },
+          fields: 'id',
+        });
+        id = created.data.id as string;
+      }
+      this.folderPathCache.set(builtPath, id);
+      parentId = id;
+    }
+    return parentId;
+  }
+
+  /** Splits a key like "Sync/Personal/college/marksheet.pdf" into its real parent folder path
+   * ("Sync/Personal/college") and real filename ("marksheet.pdf") — the last "/" is the only one that
+   * matters, everything before it is folder structure now instead of being crammed into one flat name. A
+   * key with no "/" at all (a root-level file, or a whole-account key found via browseFolder/listAll) has
+   * no dir component. */
+  private splitKey(key: string): { dir: string; name: string } {
+    const slash = key.lastIndexOf('/');
+    return slash === -1 ? { dir: '', name: key } : { dir: key.slice(0, slash), name: key.slice(slash + 1) };
   }
 
   private async findFileId(key: string): Promise<string | null> {
+    const cached = this.fileIdCache.get(key);
+    if (cached) return cached;
+    const resolved = await this.findFileIdUncached(key);
+    if (resolved) this.fileIdCache.set(key, resolved);
+    return resolved;
+  }
+
+  private async findFileIdUncached(key: string): Promise<string | null> {
+    const trashName = trashKeyName(key);
     // trash keys are UUID-qualified and only ever live in the dedicated trash folder — no wide fallback
     // needed or wanted for these (unlike a real filename, there's no "pre-existing file the user browsed
     // to" case to cover).
-    if (trashKeyName(key)) return this.findFileIdInRoot(key);
+    if (trashName) return this.findFileIdInFolder(await this.getTrashFolderId(), trashName);
 
-    const inRoot = await this.findFileIdInRoot(key);
+    if (isNewSchemeKey(key)) {
+      // a real nested sync path — resolved entirely within its own real folder chain, no root/wide
+      // fallback: this key was only ever going to be found here or nowhere.
+      const { dir, name } = this.splitKey(key);
+      const folderId = await this.resolveFolderId(dir, false);
+      return folderId ? this.findFileIdInFolder(folderId, name) : null;
+    }
+
+    // legacy flat scheme (or a root-level/whole-account key with no "/" at all) — unchanged from before
+    // real nesting existed: the whole key is the literal filename, sitting directly in the managed root.
+    const inRoot = await this.findFileIdInFolder(await this.getRootFolderId(), key);
     if (inRoot) return inRoot;
 
     // not an AllieMinate-managed file — fall back to a drive-wide name search (covers previewing/opening/
@@ -125,19 +214,37 @@ export class GoogleDriveBackend implements StorageBackend {
 
   async put(key: string, data: Buffer): Promise<void> {
     const trashName = trashKeyName(key);
-    const parentId = trashName ? await this.getTrashFolderId() : await this.getRootFolderId();
-    const name = trashName ?? key;
-    const existingId = await this.findFileIdInRoot(key);
     const media = { mimeType: 'application/octet-stream', body: bufferToStream(data) };
 
+    let parentId: string;
+    let name: string;
+    if (trashName) {
+      parentId = await this.getTrashFolderId();
+      name = trashName;
+    } else if (isNewSchemeKey(key)) {
+      const split = this.splitKey(key);
+      const resolved = await this.resolveFolderId(split.dir, true);
+      if (!resolved) throw new Error(`couldn't resolve or create the destination folder for: ${key}`);
+      parentId = resolved;
+      name = split.name;
+    } else {
+      // legacy flat scheme — the whole key becomes the literal filename at the managed root, exactly as
+      // it always has for any folder created before real nesting existed.
+      parentId = await this.getRootFolderId();
+      name = key;
+    }
+
+    const existingId = await this.findFileId(key);
     if (existingId) {
       await this.drive.files.update({ fileId: existingId, media });
+      this.fileIdCache.set(key, existingId);
     } else {
-      await this.drive.files.create({
+      const created = await this.drive.files.create({
         requestBody: { name, parents: [parentId] },
         media,
         fields: 'id',
       });
+      if (created.data.id) this.fileIdCache.set(key, created.data.id);
     }
   }
 
@@ -152,10 +259,25 @@ export class GoogleDriveBackend implements StorageBackend {
     return Buffer.from(res.data as ArrayBuffer);
   }
 
+  /** googleapis supports responseType:'stream' on the exact same call get() already makes — the request
+   * itself doesn't get any faster, but the caller (a download route) can start forwarding bytes to the
+   * client as they arrive instead of waiting for the entire file to land in memory here first. */
+  async getStream(key: string): Promise<Readable> {
+    const fileId = await this.findFileId(key);
+    if (!fileId) throw new Error(`file not found: ${key}`);
+
+    const res = await this.drive.files.get(
+      { fileId, alt: 'media' },
+      { responseType: 'stream' },
+    );
+    return res.data as unknown as Readable;
+  }
+
   async delete(key: string): Promise<void> {
     const fileId = await this.findFileId(key);
     if (!fileId) return;
     await this.drive.files.delete({ fileId });
+    this.fileIdCache.delete(key);
   }
 
   /** Drive's own viewer/editor link — works for native Google Docs/Sheets/Slides and for real .docx/.xlsx opened through Drive's editors. */
@@ -195,26 +317,90 @@ export class GoogleDriveBackend implements StorageBackend {
     return { usedBytes: Number(quota.usage), totalBytes: Number(quota.limit) };
   }
 
-  async list(prefix: string): Promise<FileEntry[]> {
-    const rootId = await this.getRootFolderId();
-    const res = await this.drive.files.list({
-      q: `'${rootId}' in parents and trashed = false`,
-      fields: 'files(id, name, size, modifiedTime, createdTime, md5Checksum, mimeType, thumbnailLink)',
-      spaces: 'drive',
-      pageSize: 1000,
-    });
+  // pageSize:1000 alone silently truncates at a folder's first 1000 items — with every sync folder sharing
+  // space under one real Drive tree, a single deeply-nested folder could still hit that. A truncated list
+  // here looks EXACTLY like "everything past item 1000 was deleted remotely" to the sync engine, which then
+  // deletes the corresponding local copies to "honor" that phantom delete. Must page through every result,
+  // not just the first batch — same reasoning as listAll() below.
+  private async walkFolder(folderId: string, relPrefix: string, out: FileEntry[]): Promise<void> {
+    const subfolders: { id: string; name: string }[] = [];
+    let pageToken: string | undefined;
+    do {
+      const res = await this.drive.files.list({
+        q: `'${folderId}' in parents and trashed = false`,
+        fields: 'nextPageToken, files(id, name, size, modifiedTime, createdTime, md5Checksum, mimeType, thumbnailLink)',
+        spaces: 'drive',
+        pageSize: 1000,
+        pageToken,
+      });
+      for (const f of res.data.files ?? []) {
+        if (f.mimeType === 'application/vnd.google-apps.folder') {
+          subfolders.push({ id: f.id as string, name: f.name ?? '' });
+          continue;
+        }
+        out.push({
+          path: relPrefix ? `${relPrefix}/${f.name}` : (f.name ?? ''),
+          size: Number(f.size ?? 0),
+          hash: f.md5Checksum ?? '',
+          modifiedAt: f.modifiedTime ?? new Date(0).toISOString(),
+          mimeType: f.mimeType ?? undefined,
+          createdAt: f.createdTime ?? undefined,
+          thumbnailUrl: f.thumbnailLink ?? undefined,
+        });
+      }
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken);
 
-    return (res.data.files ?? [])
-      .filter((f) => f.name?.startsWith(prefix))
-      .map((f) => ({
-        path: f.name ?? '',
-        size: Number(f.size ?? 0),
-        hash: f.md5Checksum ?? '',
-        modifiedAt: f.modifiedTime ?? new Date(0).toISOString(),
-        mimeType: f.mimeType ?? undefined,
-        createdAt: f.createdTime ?? undefined,
-        thumbnailUrl: f.thumbnailLink ?? undefined,
-      }));
+    for (const sf of subfolders) {
+      await this.walkFolder(sf.id, relPrefix ? `${relPrefix}/${sf.name}` : sf.name, out);
+    }
+  }
+
+  /** Everything under a real nested folder path (e.g. "Sync/Personal") — recursing into whatever real
+   * subfolders exist there, matching however deep the local folder tree being synced actually goes. Returns
+   * `path` as the full relative path from the managed root ("Sync/Personal/college/marksheet.pdf"), same
+   * shape the (still flat, for pre-existing folders created before this) name-prefix scheme returned, so
+   * callers stripping `folder.remotePrefix` off the front don't need to change. */
+  async list(prefix: string): Promise<FileEntry[]> {
+    const out: FileEntry[] = [];
+
+    if (isNewSchemeKey(prefix)) {
+      const folderId = await this.resolveFolderId(prefix, false);
+      if (folderId) await this.walkFolder(folderId, prefix, out);
+      return out;
+    }
+
+    // legacy flat scheme — every pre-existing sync folder stored its files as one flat root-level filename
+    // literally starting with "<prefix>/" (prefix was an opaque single-segment slug, e.g. "wallpapers-a1b2c3",
+    // never a real Drive folder). Returning [] here instead of scanning for them is exactly the bug that
+    // caused real data loss before: an old folder's files look "deleted" and the sync engine trashes the
+    // local copies to match. Unchanged from before this migration, beyond the pagination fix already applied.
+    const rootId = await this.getRootFolderId();
+    let pageToken: string | undefined;
+    do {
+      const res = await this.drive.files.list({
+        q: `'${rootId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`,
+        fields: 'nextPageToken, files(id, name, size, modifiedTime, createdTime, md5Checksum, mimeType, thumbnailLink)',
+        spaces: 'drive',
+        pageSize: 1000,
+        pageToken,
+      });
+      for (const f of res.data.files ?? []) {
+        if (!f.name?.startsWith(prefix)) continue;
+        out.push({
+          path: f.name,
+          size: Number(f.size ?? 0),
+          hash: f.md5Checksum ?? '',
+          modifiedAt: f.modifiedTime ?? new Date(0).toISOString(),
+          mimeType: f.mimeType ?? undefined,
+          createdAt: f.createdTime ?? undefined,
+          thumbnailUrl: f.thumbnailLink ?? undefined,
+        });
+      }
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken);
+
+    return out;
   }
 
   /** One level of the account's REAL tree, starting at Drive's actual top level ('root') — not

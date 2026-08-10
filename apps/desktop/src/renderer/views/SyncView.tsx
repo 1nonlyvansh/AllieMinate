@@ -12,8 +12,8 @@ import { Modal } from '../components/Modal';
 import { DropdownMenu } from '../components/DropdownMenu';
 import { NearbyPickerModal } from '../components/NearbyPickerModal';
 import { SendableFile } from '../lib/sendActions';
-import { IconSync, IconAdd, IconTrash, IconPhone, IconChevronLeft, IconFiles, IconDevices } from '../icons';
-import { deviceNounLower, fileBrowserName } from '../lib/platformLabels';
+import { IconSync, IconAdd, IconTrash, IconPhone, IconMac, IconWindows, IconChevronLeft, IconFiles, IconDevices } from '../icons';
+import { deviceNounLower, fileBrowserName, biometricName } from '../lib/platformLabels';
 
 const INVITE_POLL_MS = 15000;
 
@@ -134,11 +134,17 @@ function SyncFromDeviceBrowser({ device, onBack }: { device: PairedDeviceInfo; o
   const [nearbyTarget, setNearbyTarget] = useState<{ file: SendableFile; name: string } | null>(null);
 
   useEffect(() => {
-    fetch(`${API_BASE}/devices/${device.id}/sync-pairs`)
+    // no-store: without it, a browser that already hit this exact URL once (e.g. earlier in the same
+    // session, before the backend's response shape changed) can keep serving that stale cached body
+    // instead of a fresh request — every other cross-device fetch in this codebase already disables
+    // caching for the same reason.
+    fetch(`${API_BASE}/devices/${device.id}/sync-pairs`, { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
         if (data.error) throw new Error(data.error);
-        const list: RemoteSyncPair[] = (data.pairs ?? []).filter((p: RemoteSyncPair) => p.status === 'active');
+        // the backend normalizes this list to {folders: [...]} — same field name every other
+        // /devices/:id/<family> route uses — not the raw upstream {pairs: [...]} shape.
+        const list: RemoteSyncPair[] = (data.folders ?? []).filter((p: RemoteSyncPair) => p.status === 'active');
         setPairs(list);
         if (list.length > 0) openPair(list[0]);
       })
@@ -150,7 +156,7 @@ function SyncFromDeviceBrowser({ device, onBack }: { device: PairedDeviceInfo; o
     setActivePair(pair);
     setFilesLoading(true);
     setFilesError(null);
-    fetch(`${API_BASE}/devices/${device.id}/sync-pairs/${pair.id}/files`)
+    fetch(`${API_BASE}/devices/${device.id}/sync-pairs/${pair.id}/files`, { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
         setFiles(data.files ?? []);
@@ -321,14 +327,24 @@ function SyncFromDeviceBrowser({ device, onBack }: { device: PairedDeviceInfo; o
   );
 }
 
+function syncFromDeviceIcon(platform: string, size: number) {
+  if (platform === 'darwin') return <IconMac size={size} />;
+  if (platform === 'win32') return <IconWindows size={size} />;
+  return <IconPhone size={size} />;
+}
+
 function SyncFromDeviceSection() {
   const [devices, setDevices] = useState<PairedDeviceInfo[]>([]);
   const [browsing, setBrowsing] = useState<PairedDeviceInfo | null>(null);
 
   useEffect(() => {
+    // Every paired platform runs its own Sync Pair registry (Sync Engine + Universal Sync legs both store
+    // as SyncPair records) — this used to filter down to Android phones only, which meant a paired Mac or
+    // Windows PC's real synced folders had no way to ever show up here even though the underlying
+    // /devices/:id/sync-pairs route (proxied per-platform) already returns them correctly.
     fetch(`${API_BASE}/devices`)
       .then((res) => res.json())
-      .then((data) => setDevices((data.paired ?? []).filter((d: PairedDeviceInfo) => d.platform === 'android')))
+      .then((data) => setDevices(data.paired ?? []))
       .catch(() => {});
   }, []);
 
@@ -341,7 +357,7 @@ function SyncFromDeviceSection() {
         </div>
       ) : devices.length === 0 ? (
         <div className="empty-state glass-card" style={{ padding: '24px 0', marginBottom: 24 }}>
-          No paired Android phones with the Sync Engine set up yet.
+          No paired devices with the Sync Engine set up yet.
         </div>
       ) : (
         <div className="device-strip" style={{ marginBottom: 24 }}>
@@ -352,7 +368,7 @@ function SyncFromDeviceSection() {
               style={{ cursor: d.online ? 'pointer' : 'default', opacity: d.online ? 1 : 0.6 }}
               onClick={() => d.online && setBrowsing(d)}
             >
-              <div className="device-icon"><IconPhone size={34} /></div>
+              <div className="device-icon">{syncFromDeviceIcon(d.platform, 34)}</div>
               <div className="device-name">{d.name}</div>
               <div className="device-meta">{d.platform}</div>
               <div className={`status-pill ${d.online ? 'online' : 'offline'}`}>
@@ -383,6 +399,7 @@ export function SyncView({
   const [rules, setRules] = useState<string[]>([]);
   const [newRule, setNewRule] = useState('');
   const [savingRules, setSavingRules] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
 
   // covers invites that arrived while this device was offline/closed — a live push while the app is open
@@ -458,9 +475,13 @@ export function SyncView({
     refresh();
   }
 
-  async function remove(id: string, name: string) {
-    if (!window.confirm(`Stop syncing "${name}"? Local files and anything already synced stay untouched.`)) return;
+  function remove(id: string, name: string) {
+    setPendingDelete({ id, name });
+  }
+
+  async function confirmDelete(id: string) {
     await fetch(`${API_BASE}/sync/pairs/${id}`, { method: 'DELETE' });
+    setPendingDelete(null);
     refresh();
   }
 
@@ -557,6 +578,20 @@ export function SyncView({
                   >
                     {p.status === 'active' && !p.paused ? 'Active' : 'Paused'}
                   </span>
+                  {p.universalSyncId && (
+                    <span
+                      style={{
+                        fontSize: 10.5,
+                        padding: '1px 7px',
+                        borderRadius: 999,
+                        background: 'rgba(10,132,255,0.15)',
+                        color: 'var(--accent)',
+                      }}
+                      title="One folder shared out to multiple devices from a single cloud login — as opposed to a plain one-to-one Sync Pair"
+                    >
+                      Universal Sync
+                    </span>
+                  )}
                   <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>{DIRECTION_SHORT[p.direction]}</span>
                 </div>
                 <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.localPath}>
@@ -701,6 +736,105 @@ export function SyncView({
       {browsingPair && (
         <SyncPairFileBrowser pair={browsingPair} onClose={() => setBrowsingPair(null)} onChanged={refresh} />
       )}
+
+      {pendingDelete && (
+        <DeleteSyncPairDialog
+          name={pendingDelete.name}
+          onCancel={() => setPendingDelete(null)}
+          onConfirmed={() => confirmDelete(pendingDelete.id)}
+        />
+      )}
     </section>
+  );
+}
+
+// Deleting a Sync Pair is a real destructive action (the underlying two-way engine treats it as "stop
+// tracking this folder," not reversible from the UI) — a plain window.confirm() was too easy to blow
+// through by reflex. This gates the actual delete behind the SAME device auth App Lock already uses
+// (Touch ID / Windows Hello where available, the app's own PIN otherwise), independent of whether App
+// Lock itself is turned on — canUseTouchID()/tryTouchID() are a pure OS capability check, not gated on
+// the app's own lock state. If neither is available on this machine (no biometric hardware AND no App
+// Lock PIN ever set), there's no extra factor to demand — falls back to the Yes/No confirmation alone.
+function DeleteSyncPairDialog({ name, onCancel, onConfirmed }: { name: string; onCancel: () => void; onConfirmed: () => void }) {
+  const [stage, setStage] = useState<'confirm' | 'auth' | 'pin'>('confirm');
+  const [canTouchID, setCanTouchID] = useState(false);
+  // whether App Lock has ever been set up at all (a real PIN exists to check against) — distinct from
+  // canTouchID, and needed so a WRONG pin can be told apart from NO pin ever configured (see submitPin).
+  const [hasPin, setHasPin] = useState(false);
+  const [checkedAuth, setCheckedAuth] = useState(false);
+  const [trying, setTrying] = useState(false);
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    Promise.all([window.security.canTouchID(), window.security.isEnabled()]).then(([can, enabled]) => {
+      setCanTouchID(can);
+      setHasPin(enabled);
+      setCheckedAuth(true);
+    });
+  }, []);
+
+  async function onYes() {
+    if (!checkedAuth) return;
+    if (!canTouchID && !hasPin) return onConfirmed(); // nothing to check against — plain confirmation stands
+    if (canTouchID) {
+      setStage('auth');
+      setTrying(true);
+      const ok = await window.security.tryTouchID();
+      setTrying(false);
+      if (ok) return onConfirmed();
+      // cancelled/failed — fall back to PIN only if one actually exists, otherwise there's no second
+      // factor to offer and re-trying Touch ID in a loop isn't a real recovery path.
+      if (hasPin) { setStage('pin'); return; }
+      setStage('confirm');
+      return;
+    }
+    setStage('pin');
+  }
+
+  async function submitPin() {
+    const ok = await window.security.verifyPin(pin);
+    if (ok) return onConfirmed();
+    setError('Wrong PIN');
+    setPin('');
+  }
+
+  return (
+    <Modal title="Delete Sync Pair" onClose={onCancel}>
+      {stage === 'confirm' && (
+        <>
+          <p style={{ marginBottom: 20 }}>Are you sure you want to delete "{name}" from AllieMinate?</p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button className="btn" onClick={onCancel}>No</button>
+            <button className="btn danger" onClick={onYes} disabled={!checkedAuth}>Yes</button>
+          </div>
+        </>
+      )}
+      {stage === 'auth' && (
+        <div style={{ textAlign: 'center', padding: '10px 0' }}>
+          <div style={{ marginBottom: 16 }}>{trying ? `Waiting for ${biometricName}…` : `Confirm with ${biometricName}`}</div>
+        </div>
+      )}
+      {stage === 'pin' && (
+        <>
+          <p style={{ marginBottom: 12 }}>Enter your PIN to confirm deleting "{name}".</p>
+          <input
+            type="password"
+            inputMode="numeric"
+            value={pin}
+            onChange={(e) => setPin(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submitPin()}
+            className="select-field"
+            style={{ width: '100%', textAlign: 'center', fontSize: 18, letterSpacing: 4 }}
+            autoFocus
+          />
+          {error && <div style={{ color: 'var(--offline)', fontSize: 12, marginTop: 8 }}>{error}</div>}
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+            <button className="btn" onClick={onCancel}>Cancel</button>
+            <button className="btn primary" onClick={submitPin} disabled={!pin}>Confirm</button>
+          </div>
+        </>
+      )}
+    </Modal>
   );
 }

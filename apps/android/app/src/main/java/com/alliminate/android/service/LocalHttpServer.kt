@@ -9,6 +9,8 @@ import com.alliminate.android.data.LocalManifest
 import com.alliminate.android.data.Prefs
 import com.alliminate.android.data.ReceivedFile
 import com.alliminate.android.data.SyncPairStore
+import com.alliminate.android.data.UniversalSyncInvite
+import com.alliminate.android.data.UniversalSyncInviteStore
 import com.alliminate.android.notifications.TransferNotifications
 import fi.iki.elonen.NanoHTTPD
 import org.json.JSONArray
@@ -112,6 +114,7 @@ private fun walkExternalStorage(extensions: Set<String>): List<java.io.File> {
 class LocalHttpServer(private val context: Context) : NanoHTTPD(LOCAL_SERVER_PORT) {
 
     private fun unauthorized() = newFixedLengthResponse(Response.Status.UNAUTHORIZED, "application/json", """{"error":"unauthorized"}""")
+    private fun forbidden(msg: String) = newFixedLengthResponse(Response.Status.FORBIDDEN, "application/json", """{"error":"$msg"}""")
     private fun notFound() = newFixedLengthResponse(Response.Status.NOT_FOUND, "application/json", """{"error":"not found"}""")
     private fun badRequest(msg: String) = newFixedLengthResponse(Response.Status.BAD_REQUEST, "application/json", """{"error":"$msg"}""")
     private fun json(body: JSONObject) = newFixedLengthResponse(Response.Status.OK, "application/json", body.toString())
@@ -127,8 +130,29 @@ class LocalHttpServer(private val context: Context) : NanoHTTPD(LOCAL_SERVER_POR
             authenticatedMaster = Prefs.pairedMasters.firstOrNull { it.token == auth } ?: return unauthorized()
         }
 
+        // Per-master "let this device see my files" toggle (device detail screen's Settings section) —
+        // gates only file BROWSING (list/download/thumbnail), never upload (that's this master SENDING to
+        // the phone, not reading from it) or the sync-pairs/status/pairing routes.
+        if (authenticatedMaster?.shareFilesWithMaster == false &&
+            session.method == Method.GET &&
+            uri.startsWith("/folders/") &&
+            (uri.endsWith("/files") || uri.endsWith("/download") || uri.endsWith("/thumbnail"))
+        ) {
+            return forbidden("File sharing with ${authenticatedMaster.name} is turned off on this phone")
+        }
+
         return when {
             session.method == Method.GET && uri == "/status" -> handleStatus()
+            // The Mac/PC "Add Sync Pair" modal's "Local Folder" mode always hits /local-folders on the
+            // TARGET device — Windows/Mac have real arbitrary local-folder shortcuts there, but a phone's
+            // own local storage is only ever the same Received/Images/Videos/etc categories /folders
+            // already exposes. Without this, that request 404s and the modal shows "Nothing to sync
+            // against on that device yet" for every Android target, every time. Same shape as /status's
+            // own folders array, so the modal's tree browser sees a real list instead of nothing.
+            session.method == Method.GET && uri == "/local-folders" -> handleStatus()
+            session.method == Method.GET && uri == "/local-folders/received/files" -> handleReceivedFiles()
+            session.method == Method.GET && uri.startsWith("/local-folders/") && uri.endsWith("/files") ->
+                handleMediaFiles("/folders/" + uri.removePrefix("/local-folders/"))
             session.method == Method.GET && uri == "/sync-pairs" -> handleSyncPairs()
             session.method == Method.GET && uri.startsWith("/sync-pairs/") && uri.endsWith("/files") -> handleSyncPairFiles(uri)
             session.method == Method.GET && uri.startsWith("/sync-pairs/") && uri.endsWith("/download") -> handleSyncPairDownload(session, uri)
@@ -145,6 +169,8 @@ class LocalHttpServer(private val context: Context) : NanoHTTPD(LOCAL_SERVER_POR
             session.method == Method.POST && uri == "/continuity" -> handleContinuity(session, authenticatedMaster!!)
             session.method == Method.POST && uri == "/unlock/request" -> handleUnlockRequest(session)
             session.method == Method.GET && uri.startsWith("/unlock/request/") && uri.endsWith("/status") -> handleUnlockStatus(uri)
+            session.method == Method.POST && uri == "/universal-sync/invite" -> handleUniversalSyncInvite(session, authenticatedMaster!!)
+            session.method == Method.POST && uri == "/clipboard/push" -> handleClipboardPush(session, authenticatedMaster!!)
             session.method == Method.POST && uri == "/unpair" -> handleUnpair(authenticatedMaster!!)
             else -> notFound()
         }
@@ -215,6 +241,21 @@ class LocalHttpServer(private val context: Context) : NanoHTTPD(LOCAL_SERVER_POR
     // auth (it's deliberately NOT in the /nearby/request-style public exemption above): only a Mac already
     // paired with this phone can even ask, since approving an unlock is a much bigger deal than accepting
     // a file share. This only ever gates the Mac's own in-app App Lock, never anything OS-level.
+    // Universal Clipboard — a paired master pushed its own new clipboard text here. Only applies it if
+    // THIS specific master still has the toggle on (a master could have been toggled off after the push
+    // was already in flight) — UniversalClipboard.kt itself is the one place that actually writes it into
+    // the phone's ClipboardManager, so both directions share the exact same "remember what we just set,
+    // don't immediately re-broadcast it" echo guard.
+    private fun handleClipboardPush(session: IHTTPSession, master: com.alliminate.android.data.PairedMaster): Response {
+        val bytes = readRequestBody(session) ?: return badRequest("missing content-length")
+        val body = runCatching { JSONObject(String(bytes, Charsets.UTF_8)) }.getOrNull() ?: return badRequest("invalid body")
+        val text = body.optString("text").takeIf { it.isNotBlank() } ?: return badRequest("missing text")
+        if (master.universalClipboardEnabled) {
+            com.alliminate.android.data.UniversalClipboard.applyRemoteText(context, text)
+        }
+        return json(JSONObject().apply { put("ok", true) })
+    }
+
     private fun handleUnlockRequest(session: IHTTPSession): Response {
         val bytes = readRequestBody(session) ?: return badRequest("missing content-length")
         val body = runCatching { JSONObject(String(bytes, Charsets.UTF_8)) }.getOrNull() ?: return badRequest("invalid body")
@@ -229,6 +270,37 @@ class LocalHttpServer(private val context: Context) : NanoHTTPD(LOCAL_SERVER_POR
         val id = uri.removePrefix("/unlock/request/").removeSuffix("/status")
         val request = UnlockApprovalRegistry.get(id) ?: return notFound()
         return json(JSONObject().apply { put("status", request.status.name.lowercase()) })
+    }
+
+    // Universal Sync Folder — called BY a paired Master (the "host") ON this phone, same push mechanism
+    // as /continuity and /unlock/request above. Bearer-authenticated like those (this route isn't in the
+    // /nearby/request-style unpaired exemption): only a Master this phone already trusts can invite it
+    // into a synced folder. `authenticatedMaster` IS the host here — a phone only ever gets pushed to by a
+    // backend it's directly paired with, so there's no multi-hop routing to resolve.
+    private fun handleUniversalSyncInvite(session: IHTTPSession, master: com.alliminate.android.data.PairedMaster): Response {
+        val bytes = readRequestBody(session) ?: return badRequest("missing content-length")
+        val body = runCatching { JSONObject(String(bytes, Charsets.UTF_8)) }.getOrNull() ?: return badRequest("invalid body")
+        val id = body.optString("id").takeIf { it.isNotBlank() } ?: return badRequest("missing id")
+        val hostFolderId = body.optString("hostFolderId").takeIf { it.isNotBlank() } ?: return badRequest("missing hostFolderId")
+        val universalSyncId = body.optString("universalSyncId").takeIf { it.isNotBlank() } ?: return badRequest("missing universalSyncId")
+        val name = body.optString("name").takeIf { it.isNotBlank() } ?: return badRequest("missing name")
+        val permission = body.optString("permission").takeIf { it.isNotBlank() } ?: return badRequest("missing permission")
+
+        val invite = UniversalSyncInvite(
+            id = id,
+            hostDeviceId = body.optString("hostDeviceId", master.id),
+            hostDeviceName = body.optString("hostDeviceName", master.name),
+            hostFolderId = hostFolderId,
+            universalSyncId = universalSyncId,
+            name = name,
+            permission = permission,
+            status = "pending",
+            createdAt = body.optString("createdAt"),
+            masterId = master.id,
+        )
+        UniversalSyncInviteStore.add(invite)
+        TransferNotifications.showUniversalSyncInvite(context, invite.id, invite.hostDeviceName, invite.name)
+        return json(JSONObject().apply { put("ok", true) })
     }
 
     // The Master just removed us from its own paired-devices list (devices.ts's DELETE /devices/:id) and

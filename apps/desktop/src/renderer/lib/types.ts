@@ -54,6 +54,7 @@ export interface PairedDeviceInfo {
   host?: string;
   pairedAt?: string;
   nearbyShareEnabled?: boolean;
+  universalClipboardEnabled?: boolean;
 }
 
 export interface NearbyPeerInfo {

@@ -74,11 +74,16 @@ export class PCloudBackend implements StorageBackend {
   }
 
   async list(prefix: string): Promise<FileEntry[]> {
+    // A swallowed failure here used to come back as an empty list — indistinguishable from "this folder
+    // really has nothing in it" to the sync engine, which deletes local copies to match what looks like a
+    // remote-side mass delete. Let a real failure (auth, network, rate limit) propagate instead; only a
+    // genuinely-missing root folder (nothing synced yet) is treated as empty.
     let data;
     try {
       data = await this.call('listfolder', { path: ROOT_PATH, recursive: '1' });
-    } catch {
-      return [];
+    } catch (err) {
+      if (err instanceof Error && /not found|does not exist/i.test(err.message)) return [];
+      throw err;
     }
     const all: { path: string; entry: PCloudEntry }[] = [];
     walk(data.metadata.contents ?? [], '', all);

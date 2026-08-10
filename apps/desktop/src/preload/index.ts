@@ -34,6 +34,8 @@ contextBridge.exposeInMainWorld('alliminate', {
     ipcRenderer.on('tray:state', listener);
     return () => ipcRenderer.removeListener('tray:state', listener);
   },
+  readClipboardText: (): Promise<string> => ipcRenderer.invoke('clipboard:readText'),
+  writeClipboardText: (text: string): Promise<void> => ipcRenderer.invoke('clipboard:writeText', text),
 });
 
 contextBridge.exposeInMainWorld('security', {

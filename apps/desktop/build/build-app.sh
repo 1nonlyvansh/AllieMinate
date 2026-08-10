@@ -65,7 +65,13 @@ EOF
 # --- backend, self-contained with its own node_modules ---
 mkdir -p "$APP_RES/backend"
 cp -R "$BACKEND/dist" "$APP_RES/backend/dist"
-cp "$BACKEND/folders.json" "$APP_RES/backend/folders.json"
+# NOT `cp "$BACKEND/folders.json"` — that file is this dev machine's own gitignored runtime state (pinned
+# folders, including real local absolute paths from testing), not shippable seed data. Copying it
+# unconditionally baked the developer's own test folders (and their local disk paths) into every fresh
+# .dmg — the exact same "runtime state leaking into a pristine build" bug class the credential leak was,
+# just via a different file. A brand-new user's pinned-folders list starts empty; the dev install below
+# gets its real folders.json back via the generic preserve/restore step like every other runtime file.
+echo '[]' > "$APP_RES/backend/folders.json"
 echo "== copying node_modules (this takes a bit) =="
 # excludes packages the backend (a plain Node child process, no Electron API access — see spawnBackend)
 # never actually imports: electron itself (245MB — the backend runs under Electron's bundled Node via
@@ -104,6 +110,9 @@ cp "$DESKTOP/build/AllieMinate.icns" "$APP_RES/AllieMinate.icns"
 # placeholders here — config.ts already runs fine with everything empty (README's own "fresh clone" setup
 # path is exactly this: cp .env.example .env, fill in only what you want).
 cp "$ROOT/.env.example" "$BUILD_APP/Contents/.env"
+
+echo "== building macOS Share Extensions =="
+bash "$DESKTOP/macos-share-extension/build.sh" "$BUILD_APP/Contents/PlugIns"
 
 echo "== code signing (ad-hoc) =="
 # node_modules copied via cp -RL can pick up resource-fork/FinderInfo extended attrs (esp. from

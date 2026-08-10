@@ -1,7 +1,7 @@
 import fs from 'node:fs';
-import path from 'node:path';
+import { envPath } from './paths';
 
-const ENV_PATH = path.join(__dirname, '../../../.env');
+const ENV_PATH = envPath();
 
 export function updateEnv(values: Record<string, string>): void {
   let content = fs.existsSync(ENV_PATH) ? fs.readFileSync(ENV_PATH, 'utf-8') : '';

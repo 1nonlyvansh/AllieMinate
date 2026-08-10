@@ -46,6 +46,7 @@ class LocalServerService : Service() {
             NearbyBeacon.start()
             NearbyBeacon.startListening()
             SyncFileObservers.start(applicationContext)
+            com.alliminate.android.data.UniversalClipboard.start(applicationContext)
             // battery-optimization exemption only keeps the CPU/process alive under Doze — it says nothing
             // about the WiFi RADIO, which independently drops into 802.11 power-save while the screen is
             // off, only waking for its DTIM beacon interval. That's exactly what made the Master Device see
@@ -70,6 +71,7 @@ class LocalServerService : Service() {
         NearbyBeacon.stop()
         NearbyBeacon.stopListening()
         SyncFileObservers.stop()
+        com.alliminate.android.data.UniversalClipboard.stop(applicationContext)
         stopServerInBackground()
         wifiLock?.let { if (it.isHeld) runCatching { it.release() } }
         wifiLock = null

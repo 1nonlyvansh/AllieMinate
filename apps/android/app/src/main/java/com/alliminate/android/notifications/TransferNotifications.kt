@@ -268,6 +268,33 @@ object TransferNotifications {
         runCatching { NotificationManagerCompat.from(context).notify((fromName + key).hashCode(), notification) }
     }
 
+    /** Universal Sync Folder invite arrived — unlike Nearby Share/Unlock, accepting needs a folder picker
+     * (new or existing), which a plain notification action can't drive, so this just taps through to the
+     * Sync screen (same EXTRA_OPEN_ROUTE deep-link the home-screen widget already uses) where the pending
+     * invite banner handles accept/decline. Already-trusted paired Master, so no separate consent gate. */
+    fun showUniversalSyncInvite(context: Context, inviteId: String, hostName: String, folderName: String) {
+        if (!hasPermission(context)) return
+        ensureChannel(context)
+        val openIntent = Intent(context, com.alliminate.android.MainActivity::class.java).apply {
+            putExtra(com.alliminate.android.widget.EXTRA_OPEN_ROUTE, "sync")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pending = PendingIntent.getActivity(
+            context, inviteId.hashCode(), openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setContentTitle("Universal Sync invite")
+            .setContentText("$hostName wants to share \"$folderName\" with this phone")
+            .setSmallIcon(R.drawable.ic_notification)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_SOCIAL)
+            .setAutoCancel(true)
+            .setContentIntent(pending)
+            .build()
+        runCatching { NotificationManagerCompat.from(context).notify(inviteId.hashCode(), notification) }
+    }
+
     fun showReceiveCancelled(context: Context, fileName: String) {
         clearIncomingProgress(context)
         if (!hasPermission(context)) return

@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { baseProviderOf } from '@alliminate/shared';
+import type { SyncEvent } from '@alliminate/shared';
 import type { PairedDeviceInfo } from './lib/types';
 import { Thumbnail } from './components/Thumbnail';
 import { Skeleton } from './components/Skeleton';
 import { DropdownMenu } from './components/DropdownMenu';
 import { NearbyPickerModal } from './components/NearbyPickerModal';
+import { PreviewModal, PreviewTarget } from './components/PreviewModal';
 import { usePairedDevices, buildSendMenuItems, sendFileToDevice, SendableFile } from './lib/sendActions';
 import { formatBytes, timeAgo, broadCategorize } from './lib/format';
 import { IconMac, IconWindows, IconHome, IconCloud, IconDevices, IconDownload, IconCopy, IconShare } from './icons';
@@ -12,11 +14,21 @@ import { isWindows, thisDeviceLabel, deviceNounLower, fileBrowserName } from './
 import { CLOUD_ICONS } from './lib/cloudIcons';
 
 const API_BASE = 'http://localhost:4310';
+const WS_URL = 'ws://localhost:4310/ws';
 
 const BASE_PROVIDER_LABEL: Record<string, string> = {
   'google-drive': 'Google Drive', b2: 'Backblaze B2', 'idrive-e2': 'IDrive e2',
   mega: 'MEGA', pcloud: 'pCloud', onedrive: 'OneDrive',
 };
+
+// A cloud storage key is always forward-slash (S3-style, regardless of OS), so a plain split('/') is fine
+// for those — but a device recent-files path is now a real filesystem path from whatever OS that device
+// runs (see devices.ts's fetchDeviceRecentFiles), and a Windows peer's path is backslash-separated
+// (C:\Users\...\file.ext). split('/') alone leaves that entire string as the "name" on a Windows peer's
+// card — split on either separator so both platforms' real paths reduce to just the filename.
+function deviceFileName(path: string): string {
+  return path.split(/[/\\]/).pop() ?? path;
+}
 
 interface RecentFile {
   folderId: string;
@@ -157,23 +169,45 @@ function DeviceFileThumb({ f, size = 22 }: { f: DeviceRecentFile; size?: number 
 
 // horizontal, scrollable strip of a single device's most-recent files — revealed with a slide/fade-in
 // animation when its device row is clicked in the tray's Recent Devices Files tab.
-function DeviceRecentStrip({ deviceId }: { deviceId: string }) {
+// The tray's BrowserWindow is created once and just hidden/shown from then on (see main/tray.ts) — it only
+// gets a real reload on a hide-then-show toggle, never while it's sitting open. Without a refetch loop, a
+// file that shows up (or a new download) after this strip first mounted would never appear until the panel
+// happened to fully reload — polling while expanded is what actually keeps it live.
+const RECENT_STRIP_POLL_MS = 15000;
+
+function DeviceRecentStrip({
+  deviceId,
+  onPreview,
+  refreshSignal,
+}: {
+  deviceId: string;
+  onPreview: (f: DeviceRecentFile) => void;
+  // bumped by TrayPanel's WS listener on 'device-recent-updated' — the backend relays this the instant a
+  // Mac/Windows peer's own local-recent-updated fires (see devices.ts's syncPeerRecentWatchers), so this
+  // refetches immediately instead of waiting up to RECENT_STRIP_POLL_MS.
+  refreshSignal: number;
+}) {
   const [files, setFiles] = useState<DeviceRecentFile[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${API_BASE}/devices/${deviceId}/recent?limit=6`, { cache: 'no-store' })
-      .then((res) => res.json())
-      .then((data) => {
-        if (!cancelled) setFiles(data.files ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setFiles([]);
-      });
+    function load() {
+      fetch(`${API_BASE}/devices/${deviceId}/recent?limit=6`, { cache: 'no-store' })
+        .then((res) => res.json())
+        .then((data) => {
+          if (!cancelled) setFiles(data.files ?? []);
+        })
+        .catch(() => {
+          if (!cancelled) setFiles((prev) => prev ?? []);
+        });
+    }
+    load();
+    const interval = setInterval(load, RECENT_STRIP_POLL_MS);
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
-  }, [deviceId]);
+  }, [deviceId, refreshSignal]);
 
   const shown = files;
 
@@ -198,20 +232,13 @@ function DeviceRecentStrip({ deviceId }: { deviceId: string }) {
       {shown !== null && shown.length > 0 && (
         <div className="tray-device-strip-row">
           {shown.map((f) => {
-            const name = f.path.split('/').pop() ?? f.path;
+            const name = deviceFileName(f.path);
             return (
               <RecentFileCard
                 key={f.folderId + f.path}
                 url={url(f)}
                 filename={name}
-                onClick={async () => {
-                  // there's no local copy of a phone file until it's actually fetched — reuse the same
-                  // temp-cache download prepareFileForDrag already does for native drag-out, then reveal
-                  // that cached copy, so clicking a device file behaves the same way This Mac's own files
-                  // do (open Finder at the file) instead of triggering a browser-style download/open.
-                  const result = await window.alliminate.prepareFileForDrag(url(f), name);
-                  if (result.ok && result.path) window.alliminate.showInFinder(result.path);
-                }}
+                onClick={() => onPreview(f)}
               >
                 <DeviceFileThumb f={f} size={20} />
                 <div className="tray-recent-name">{name}</div>
@@ -337,23 +364,38 @@ function RecentFileCard({
 // "This Mac" in the Recent Devices Files tab — the Mac's own recently-touched local files, shown the
 // exact same horizontal-scroller way a paired phone's recent files are, via /local/recent instead of a
 // device's LAN-reachable HTTP server.
-function MacRecentStrip({ onShareNearby }: { onShareNearby: (file: SendableFile, name: string) => void }) {
+function MacRecentStrip({
+  onShareNearby,
+  refreshSignal,
+}: {
+  onShareNearby: (file: SendableFile, name: string) => void;
+  // bumped by TrayPanel's WS listener the instant the backend's own fs.watch (see localFiles.ts's
+  // startLocalRecentWatcher) sees a change under Desktop/Documents/Downloads/Pictures/Movies/Music — this
+  // is what makes a new screenshot or a deleted file show up immediately instead of waiting for the next
+  // poll tick, which is still here underneath as a fallback if the watcher or the WS connection ever drops.
+  refreshSignal: number;
+}) {
   const [files, setFiles] = useState<LocalRecentFile[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${API_BASE}/local/recent?limit=6`, { cache: 'no-store' })
-      .then((res) => res.json())
-      .then((data) => {
-        if (!cancelled) setFiles(data.files ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setFiles([]);
-      });
+    function load() {
+      fetch(`${API_BASE}/local/recent?limit=6`, { cache: 'no-store' })
+        .then((res) => res.json())
+        .then((data) => {
+          if (!cancelled) setFiles(data.files ?? []);
+        })
+        .catch(() => {
+          if (!cancelled) setFiles((prev) => prev ?? []);
+        });
+    }
+    load();
+    const interval = setInterval(load, RECENT_STRIP_POLL_MS);
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
-  }, []);
+  }, [refreshSignal]);
 
   const shown = files;
 
@@ -449,6 +491,7 @@ export function TrayPanel(): JSX.Element {
   const [expandedDeviceId, setExpandedDeviceId] = useState<string | null>(null);
   const [macExpanded, setMacExpanded] = useState(false);
   const [nearbyTarget, setNearbyTarget] = useState<{ file: SendableFile; name: string } | null>(null);
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
   // '' = Combined (every connected cloud). Lives right in the panel, next to the files it controls, so
   // changing it refetches immediately — no separate Settings screen, no save step, no stale-until-reopen
   // gap. Restored from the last selection on mount, but from then on the panel is the source of truth.
@@ -461,6 +504,54 @@ export function TrayPanel(): JSX.Element {
   // the moment a drag enters the panel, regardless of how it got opened.
   const [localDragActive, setLocalDragActive] = useState(false);
   const [dropError, setDropError] = useState<string | null>(null);
+  // bumped on every 'local-recent-updated' push from the backend's fs.watch (localFiles.ts) — see
+  // MacRecentStrip, which refetches the instant this changes instead of waiting for its poll interval.
+  const [localFilesRefreshSignal, setLocalFilesRefreshSignal] = useState(0);
+  // bumped on every 'device-recent-updated' push (a paired peer's own local-recent-updated, relayed by
+  // this backend — see devices.ts's syncPeerRecentWatchers). Global rather than per-device since the tray
+  // only ever has at most one DeviceRecentStrip expanded at a time — a bump from a different device's
+  // update just triggers a harmless no-op refetch of whichever strip is actually open.
+  const [deviceFilesRefreshSignal, setDeviceFilesRefreshSignal] = useState(0);
+
+  // The tray panel is a separate renderer window from the main app (see main/tray.ts) and never otherwise
+  // connects to the backend's WebSocket — without this, "This Mac" recent files only refreshes on its own
+  // poll tick or a full panel reload, both of which are noticeably behind an actual screenshot/delete.
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+
+    function connect(): void {
+      if (cancelled) return;
+      ws = new WebSocket(WS_URL);
+      ws.onmessage = (msg) => {
+        try {
+          const event: SyncEvent = JSON.parse(msg.data);
+          if (event.type === 'local-recent-updated') setLocalFilesRefreshSignal((n) => n + 1);
+          // pairedDevices (the online/offline pill for AlliedNode/OnePlus etc) had the exact same
+          // fetch-once-on-first-tab-switch bug the recent-files strips used to have — a device's real
+          // status could flip in the background (see cachedDeviceStatus in devices.ts, which emits this
+          // exact event) and the tray would just keep showing whatever it saw the first time the Devices
+          // tab was opened, drifting further from reality the longer the panel stayed open.
+          if (event.type === 'device-status-updated') loadDeviceRecent();
+          if (event.type === 'device-recent-updated') setDeviceFilesRefreshSignal((n) => n + 1);
+        } catch {
+          // not JSON, or not a SyncEvent shape — ignore
+        }
+      };
+      ws.onclose = () => {
+        if (!cancelled) reconnectTimer = setTimeout(connect, 3000);
+      };
+      ws.onerror = () => ws?.close();
+    }
+    connect();
+
+    return () => {
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      ws?.close();
+    };
+  }, []);
 
   function loadRecent(provider: string = providerFilter) {
     setLoading(true);
@@ -483,7 +574,10 @@ export function TrayPanel(): JSX.Element {
   // its own files on demand. That also means this no longer needs the expensive cross-device fan-out at
   // all just to populate the device row list + online count.
   function loadDeviceRecent() {
-    setDeviceFilesLoading(true);
+    // only show the loading skeleton on the very first fetch — a background refresh (poll or the
+    // device-status-updated WS push) should update the online/offline pills in place, not flash the
+    // whole list back to a loading state every time.
+    if (pairedDevices === null) setDeviceFilesLoading(true);
     fetch(`${API_BASE}/devices`)
       .then((res) => res.json())
       .then((devices) => setPairedDevices(devices.paired ?? []))
@@ -525,6 +619,18 @@ export function TrayPanel(): JSX.Element {
     if (recentTab === 'devices' && pairedDevices === null) loadDeviceRecent();
   }, [recentTab]);
 
+  // GET /devices is also what triggers the backend's own background online/offline re-check for each
+  // paired device (see cachedDeviceStatus in devices.ts — it serves the cached value immediately and
+  // fires a fresh check in the background on every call). Without something calling this periodically,
+  // a device's status can go stale indefinitely if nothing else happens to hit /devices meanwhile — the
+  // WS listener above reacts fast once a refresh happens, but this poll is what actually keeps kicking
+  // one off. Only runs once the Devices tab has been opened at least once (pairedDevices !== null).
+  useEffect(() => {
+    if (pairedDevices === null) return;
+    const interval = setInterval(loadDeviceRecent, RECENT_STRIP_POLL_MS);
+    return () => clearInterval(interval);
+  }, [pairedDevices === null]);
+
   useEffect(() => {
     return window.alliminate.onTrayState((state) => {
       setTray((prev) => ({ ...prev, ...(state as TrayState) }));
@@ -563,8 +669,49 @@ export function TrayPanel(): JSX.Element {
       ? `${API_BASE}/providers/${f.providerId}/download?key=${encodeURIComponent(f.path)}`
       : `${API_BASE}/folders/${f.folderId}/download?key=${encodeURIComponent(f.path)}`;
   }
+  // shows the shared inline preview instead of the old window.open(fileUrl(f)) path, which fell through to
+  // Electron's default child-window behavior — a blank window that hung on the backend's fully-buffered
+  // download, then forced a native Save dialog once Chromium gave up trying to render octet-stream.
   function openFile(f: RecentFile) {
-    window.open(fileUrl(f));
+    setPreview({
+      source: f.providerId ? { kind: 'provider', providerId: f.providerId } : { kind: 'folder', folderId: f.folderId },
+      key: f.path,
+      name: f.path.split('/').pop() ?? f.path,
+      size: f.size,
+      provider: f.provider,
+      folderName: f.folderName,
+      modifiedAt: f.modifiedAt,
+      hash: '',
+    });
+  }
+
+  async function openInAppCloud(source: { kind: 'folder'; folderId: string } | { kind: 'provider'; providerId: string }, key: string) {
+    await fetch(`${API_BASE}/files/open`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(source.kind === 'provider' ? { providerId: source.providerId, key } : { folderId: source.folderId, key }),
+    });
+  }
+
+  function openDeviceFile(f: DeviceRecentFile) {
+    setPreview({
+      source: { kind: 'device', deviceId: f.deviceId, apiSegment: 'folders', folderId: f.folderId },
+      key: f.path,
+      name: deviceFileName(f.path),
+      size: f.size,
+      provider: f.deviceName,
+      folderName: f.deviceName,
+      modifiedAt: f.modifiedAt,
+      hash: '',
+    });
+  }
+
+  async function openInAppDevice(deviceId: string, folderId: string, key: string) {
+    await fetch(`${API_BASE}/devices/${deviceId}/folders/${folderId}/open`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }),
+    });
   }
 
   const dropReady = (tray.fileNames?.length ?? 0) > 0;
@@ -735,6 +882,7 @@ export function TrayPanel(): JSX.Element {
                 {macExpanded && (
                   <MacRecentStrip
                     onShareNearby={(file, name) => setNearbyTarget({ file, name })}
+                    refreshSignal={localFilesRefreshSignal}
                   />
                 )}
               </div>
@@ -755,7 +903,9 @@ export function TrayPanel(): JSX.Element {
                             <span className={`status-dot ${d.online ? 'online' : 'offline'}`} /> {d.online ? 'Online' : 'Offline'}
                           </span>
                         </div>
-                        {expanded && <DeviceRecentStrip deviceId={d.id} />}
+                        {expanded && (
+                          <DeviceRecentStrip deviceId={d.id} onPreview={openDeviceFile} refreshSignal={deviceFilesRefreshSignal} />
+                        )}
                       </div>
                     );
                   })}
@@ -894,6 +1044,19 @@ export function TrayPanel(): JSX.Element {
 
       {nearbyTarget && (
         <NearbyPickerModal file={nearbyTarget.file} fileName={nearbyTarget.name} onClose={() => setNearbyTarget(null)} />
+      )}
+
+      {preview && (
+        <PreviewModal
+          file={preview}
+          apiBase={API_BASE}
+          onClose={() => setPreview(null)}
+          onOpenInApp={() =>
+            preview.source.kind === 'device'
+              ? openInAppDevice(preview.source.deviceId, preview.source.folderId, preview.key)
+              : openInAppCloud(preview.source, preview.key)
+          }
+        />
       )}
     </div>
   );

@@ -58,6 +58,40 @@ data class SearchResult(
     val displayName: String get() = path.substringAfterLast('/')
 }
 
+// A Sync Pair that lives on a paired Master's OWN registry (created there, via that Mac/PC's Sync page or
+// Universal Sync wizard) — read-only from the phone's side, just for visibility ("what is this Mac/PC
+// actually syncing"). Distinct from SyncPair (data/SyncPair.kt), which is the phone's OWN push-only registry.
+data class MasterSyncPair(
+    val id: String,
+    val name: String,
+    val localPath: String,
+    val targetKind: String, // "cloud" | "device"
+    val remotePath: String,
+    val direction: String,
+    val status: String, // "active" | "paused"
+    val paused: Boolean,
+    val syncedCount: Int,
+    val totalCount: Int,
+)
+
+// A subfolder inside a Master's local-folders shortcut (e.g. "Screenshots" inside Pictures) — `path` is
+// relative to the shortcut's own root and already includes any parent segments, ready to pass straight
+// back as the next browse call's ?path=.
+data class RemoteFolderEntry(
+    val name: String,
+    val path: String,
+)
+
+data class LocalFolderListing(
+    val folders: List<RemoteFolderEntry>,
+    val files: List<RemoteFile>,
+)
+
+data class BatteryInfo(
+    val percent: Int,
+    val charging: Boolean,
+)
+
 sealed class ApiResult<out T> {
     data class Ok<T>(val value: T) : ApiResult<T>()
     data class Err(val message: String) : ApiResult<Nothing>()

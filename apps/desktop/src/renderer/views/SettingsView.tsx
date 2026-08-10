@@ -333,6 +333,29 @@ function NearbyShareToggle() {
   return <button className={`toggle${enabled ? ' on' : ''}`} onClick={toggle} disabled={enabled === null} />;
 }
 
+function AlertSoundsToggle() {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/settings/alert-sounds`)
+      .then((res) => res.json())
+      .then((data) => setEnabled(data.enabled !== false))
+      .catch(() => setEnabled(true));
+  }, []);
+
+  async function toggle() {
+    const next = !enabled;
+    setEnabled(next);
+    await fetch(`${API_BASE}/settings/alert-sounds`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: next }),
+    });
+  }
+
+  return <button className={`toggle${enabled ? ' on' : ''}`} onClick={toggle} disabled={enabled === null} />;
+}
+
 function ReceivePathRow() {
   const [path, setPath] = useState<string | null>(null);
 
@@ -903,6 +926,12 @@ export function SettingsView({
               ? { usedBytes: driveEntries.reduce((sum, s) => sum + s.usedBytes, 0), totalBytes: driveEntries.reduce((sum, s) => sum + s.totalBytes, 0) }
               : undefined
             : storage.find((s) => s.provider === p.id);
+          // GET /accounts includes the PRIMARY Drive account's own resolved label alongside the "extra"
+          // linked accounts (accountId exactly "google-drive", no ":N" suffix) — same shape as every other
+          // linked account, so it's listed right alongside them below instead of replacing the top-level
+          // card's own label; that card always reads the generic "Google Drive" now, same as every other
+          // single-account provider row.
+          const otherDriveAccounts = extraAccounts;
           const buildable = p.kind !== undefined;
           const needsSetup = (p.id === 'pcloud' && !pcloudConfigured) || (p.id === 'onedrive' && !onedriveConfigured);
           const setupEnvVars = p.id === 'pcloud' ? 'PCLOUD_CLIENT_ID/SECRET' : 'ONEDRIVE_CLIENT_ID/SECRET';
@@ -940,7 +969,7 @@ export function SettingsView({
 
               {p.id === 'google-drive' && isConnected && (
                 <div style={{ marginLeft: 24, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {extraAccounts.map((a) => {
+                  {otherDriveAccounts.map((a) => {
                     const usage2 = storage.find((s) => s.provider === a.accountId);
                     return (
                       <div className="provider-row glass-card" key={a.accountId} style={{ padding: '8px 14px' }}>
@@ -972,10 +1001,10 @@ export function SettingsView({
                   <button
                     className="btn small"
                     style={{ alignSelf: 'flex-start' }}
-                    disabled={busyId === 'add-account' || extraAccounts.length >= 6}
+                    disabled={busyId === 'add-account' || otherDriveAccounts.length >= 7}
                     onClick={addGoogleDriveAccount}
                   >
-                    {busyId === 'add-account' ? 'Waiting…' : extraAccounts.length >= 6 ? 'Max 7 accounts linked' : '+ Add another Google account'}
+                    {busyId === 'add-account' ? 'Waiting…' : otherDriveAccounts.length >= 7 ? 'Max 7 accounts linked' : '+ Add another Google account'}
                   </button>
                 </div>
               )}
@@ -1034,6 +1063,10 @@ export function SettingsView({
         <div className="pref-row glass-card">
           <div><div>Appearance</div><div className="desc">Follows System · Light · Dark</div></div>
           <span className="provider-chip right">System</span>
+        </div>
+        <div className="pref-row glass-card">
+          <div><div>Alert Sounds</div><div className="desc">Play a sound for AllieMinate notifications and device connect/disconnect</div></div>
+          <AlertSoundsToggle />
         </div>
 
         <DefaultAppsSection />

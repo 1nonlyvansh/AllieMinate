@@ -7,6 +7,21 @@ import type { MegaConfig } from '../config';
 const ROOT_FOLDER_NAME = 'AllieMinate';
 const LOGIN_TIMEOUT_MS = 15_000;
 
+// Same convention as GoogleDriveBackend (see its own NEW_SCHEME_ROOTS comment) — every NEW sync/Universal-
+// Sync remotePrefix is generated under one of these two segments and gets a real nested MEGA folder from
+// here on. Anything else is a pre-existing folder from before this migration, storing every file as one
+// flat literal filename equal to the whole key, sitting directly in the managed root — never migrated in
+// place, so it keeps working exactly as it always has.
+const NEW_SCHEME_ROOTS = ['Sync/', 'Universal Sync/'];
+function isNewSchemeKey(keyOrPrefix: string): boolean {
+  return NEW_SCHEME_ROOTS.some((root) => keyOrPrefix.startsWith(root));
+}
+
+function splitKey(key: string): { dir: string; name: string } {
+  const slash = key.lastIndexOf('/');
+  return slash === -1 ? { dir: '', name: key } : { dir: key.slice(0, slash), name: key.slice(slash + 1) };
+}
+
 // a hung MEGA login (DNS resolution stuck, TCP connect stuck with no response — seen in practice when
 // g.api.mega.co.nz is unreachable) has no built-in timeout in megajs, so `storage.ready` can sit pending
 // forever with neither a resolve nor a reject. Any route awaiting it (list/browseFolder/etc, and by
@@ -83,7 +98,33 @@ export class MegaBackend implements StorageBackend {
     return this.rootFolder;
   }
 
+  /** Resolves a relative folder path ("" = the managed root, "Sync/Personal" = a real two-level nested
+   * folder under it) to its MEGA folder node — same idea as GoogleDriveBackend.resolveFolderId, just against
+   * the tree megajs already keeps in memory rather than a paginated API. `create` decides what a missing
+   * segment means: `true` mkdir's it, `false` treats it as genuinely nothing there yet. */
+  private async resolveFolder(relDir: string, create: boolean): Promise<MutableFile | null> {
+    const root = await this.getRootFolder();
+    if (!relDir) return root;
+    let node: MutableFile = root;
+    for (const segment of relDir.split('/').filter(Boolean)) {
+      const found = (node.children ?? []).find((f) => f.directory && f.name === segment) as MutableFile | undefined;
+      if (found) {
+        node = found;
+        continue;
+      }
+      if (!create) return null;
+      node = await node.mkdir(segment);
+    }
+    return node;
+  }
+
   private async findFile(key: string): Promise<MutableFile | null> {
+    if (isNewSchemeKey(key)) {
+      const { dir, name } = splitKey(key);
+      const folder = await this.resolveFolder(dir, false);
+      return (folder?.children?.find((f) => !f.directory && f.name === name) as MutableFile | undefined) ?? null;
+    }
+
     const root = await this.getRootFolder();
     const inRoot = root.children?.find((f) => f.name === key);
     if (inRoot) return inRoot as MutableFile;
@@ -99,15 +140,28 @@ export class MegaBackend implements StorageBackend {
   async put(key: string, data: Buffer): Promise<void> {
     // MEGA allows multiple files with the identical name in the same folder (unlike S3/Drive) — a
     // concurrency bug elsewhere (two overlapping reconciliation passes racing to "replace" the same file)
-    // was producing real duplicates here instead of an overwrite. findFile() only returns the FIRST match,
-    // which silently left any earlier duplicate behind — deleting every match instead means an existing
+    // was producing real duplicates here instead of an overwrite. Matching every same-named file in the
+    // destination folder (not just findFile()'s first match) and deleting all of them means an existing
     // duplicate self-heals back down to one file the next time this path gets synced, rather than staying
     // stuck at two forever.
-    const root = await this.getRootFolder();
-    const existing = (root.children ?? []).filter((f) => f.name === key);
-    await Promise.all(existing.map((f) => (f as MutableFile).delete(true)));
+    let parent: MutableFile;
+    let name: string;
+    if (isNewSchemeKey(key)) {
+      const split = splitKey(key);
+      const resolved = await this.resolveFolder(split.dir, true);
+      if (!resolved) throw new Error(`couldn't resolve or create the destination folder for: ${key}`);
+      parent = resolved;
+      name = split.name;
+    } else {
+      // legacy flat scheme — the whole key becomes the literal filename at the managed root, exactly as
+      // it always has for any folder created before real nesting existed.
+      parent = await this.getRootFolder();
+      name = key;
+    }
 
-    await uploadBuffer(root, key, data);
+    const existing = (parent.children ?? []).filter((f) => f.name === name);
+    await Promise.all(existing.map((f) => (f as MutableFile).delete(true)));
+    await uploadBuffer(parent, name, data);
   }
 
   async get(key: string): Promise<Buffer> {
@@ -122,7 +176,34 @@ export class MegaBackend implements StorageBackend {
     await file.delete(true);
   }
 
+  /** Recurses into whatever real subfolders exist under `node`, matching however deep the local folder
+   * tree being synced actually goes — same idea as GoogleDriveBackend.walkFolder. */
+  private walkNode(node: MutableFile, relPrefix: string, out: FileEntry[]): void {
+    for (const child of node.children ?? []) {
+      if (child.directory) {
+        this.walkNode(child as MutableFile, relPrefix ? `${relPrefix}/${child.name}` : (child.name ?? ''), out);
+        continue;
+      }
+      out.push({
+        path: relPrefix ? `${relPrefix}/${child.name}` : (child.name ?? ''),
+        size: child.size ?? 0,
+        hash: '',
+        modifiedAt: child.timestamp ? new Date(child.timestamp * 1000).toISOString() : new Date(0).toISOString(),
+      });
+    }
+  }
+
   async list(prefix: string): Promise<FileEntry[]> {
+    if (isNewSchemeKey(prefix)) {
+      const folder = await this.resolveFolder(prefix, false);
+      const out: FileEntry[] = [];
+      if (folder) this.walkNode(folder, prefix, out);
+      return out;
+    }
+
+    // legacy flat scheme — every pre-existing sync folder stored its files as one flat root-level filename
+    // literally starting with "<prefix>/" (prefix was an opaque single-segment slug, never a real folder).
+    // Unchanged from before this migration.
     const root = await this.getRootFolder();
     return (root.children ?? [])
       .filter((f) => !f.directory && f.name?.startsWith(prefix))

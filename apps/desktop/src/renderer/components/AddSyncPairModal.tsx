@@ -36,6 +36,11 @@ interface PeerFolder {
   name: string;
 }
 
+interface PeerBrowseFolder {
+  name: string;
+  path: string;
+}
+
 // Google-Drive-Desktop-style flow: pick any local folder first, THEN choose its destination — either a
 // cloud account (unchanged) or a paired device's own folder (cloud-backed or a real local folder on that
 // device — see localFolders.ts), no cloud account in the loop at all for the latter. This is the
@@ -64,6 +69,15 @@ export function AddSyncPairModal({
   const [peerFolders, setPeerFolders] = useState<PeerFolder[]>([]);
   const [peerFoldersLoading, setPeerFoldersLoading] = useState(false);
   const [remoteFolderId, setRemoteFolderId] = useState('');
+  // Tree-browse state — only used when remoteFolderKind === 'local-folder', where the peer's /files route
+  // understands ?path= drill-down (cloud "folder" targets stay a flat namespace, no nested-path concept).
+  const [remoteSubPath, setRemoteSubPath] = useState('');
+  const [browseFolders, setBrowseFolders] = useState<PeerBrowseFolder[]>([]);
+  const [browseLoading, setBrowseLoading] = useState(false);
+  const [browseError, setBrowseError] = useState<string | null>(null);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [creatingFolder, setCreatingFolder] = useState(false);
 
   useEffect(() => {
     if (targetKind !== 'device') return;
@@ -82,6 +96,7 @@ export function AddSyncPairModal({
     if (targetKind !== 'device' || !deviceId) return;
     setPeerFoldersLoading(true);
     setRemoteFolderId('');
+    setRemoteSubPath('');
     const segment = remoteFolderKind === 'local-folder' ? 'local-folders' : 'folders';
     fetch(`${API_BASE}/devices/${deviceId}/${segment}`)
       .then((res) => res.json())
@@ -93,6 +108,52 @@ export function AddSyncPairModal({
       .catch(() => setPeerFolders([]))
       .finally(() => setPeerFoldersLoading(false));
   }, [targetKind, deviceId, remoteFolderKind]);
+
+  // Drill-down listing for the current shortcut + subpath — local-folder targets only (see PeerBrowseFolder).
+  useEffect(() => {
+    if (targetKind !== 'device' || remoteFolderKind !== 'local-folder' || !deviceId || !remoteFolderId) {
+      setBrowseFolders([]);
+      return;
+    }
+    setBrowseLoading(true);
+    setBrowseError(null);
+    const qs = remoteSubPath ? `?path=${encodeURIComponent(remoteSubPath)}` : '';
+    fetch(`${API_BASE}/devices/${deviceId}/local-folders/${remoteFolderId}/files${qs}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.error) throw new Error(data.error);
+        setBrowseFolders(data.folders ?? []);
+      })
+      .catch((err) => {
+        setBrowseFolders([]);
+        setBrowseError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => setBrowseLoading(false));
+  }, [targetKind, remoteFolderKind, deviceId, remoteFolderId, remoteSubPath]);
+
+  async function createRemoteFolder() {
+    if (!newFolderName.trim() || !deviceId || !remoteFolderId) return;
+    setCreatingFolder(true);
+    setBrowseError(null);
+    try {
+      const res = await fetch(`${API_BASE}/devices/${deviceId}/local-folders/${remoteFolderId}/mkdir`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: remoteSubPath || undefined, name: newFolderName.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Couldn't create that folder");
+      setNewFolderName('');
+      setNewFolderOpen(false);
+      setBrowseFolders((prev) =>
+        [...prev, { name: newFolderName.trim(), path: data.path }].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+    } catch (err) {
+      setBrowseError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCreatingFolder(false);
+    }
+  }
 
   function labelFor(s: ProviderStorage): string {
     return s.label ?? PROVIDER_LABEL[baseProviderOf(s.provider)] ?? s.provider;
@@ -118,7 +179,7 @@ export function AddSyncPairModal({
       const body =
         targetKind === 'cloud'
           ? { name: name.trim(), localPath, providerId, direction, createInCloud }
-          : { name: name.trim(), localPath, deviceId, remoteFolderId, remoteFolderKind, direction };
+          : { name: name.trim(), localPath, deviceId, remoteFolderId, remoteFolderKind, remoteSubPath, direction };
       const res = await fetch(`${API_BASE}/sync/pairs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -227,19 +288,118 @@ export function AddSyncPairModal({
                     </div>
 
                     <div>
-                      <label style={{ fontSize: 12.5, display: 'block', marginBottom: 4 }}>Folder</label>
+                      <label style={{ fontSize: 12.5, display: 'block', marginBottom: 4 }}>
+                        {remoteFolderKind === 'local-folder' ? 'Starting folder' : 'Folder'}
+                      </label>
                       {peerFoldersLoading ? (
                         <div className="empty-state">Loading…</div>
                       ) : peerFolders.length === 0 ? (
                         <div className="empty-state">Nothing to sync against on that device yet</div>
                       ) : (
-                        <select className="select-field" style={{ width: '100%' }} value={remoteFolderId} onChange={(e) => setRemoteFolderId(e.target.value)}>
+                        <select
+                          className="select-field"
+                          style={{ width: '100%' }}
+                          value={remoteFolderId}
+                          onChange={(e) => {
+                            setRemoteFolderId(e.target.value);
+                            setRemoteSubPath('');
+                          }}
+                        >
                           {peerFolders.map((f) => (
                             <option key={f.id} value={f.id}>{f.name}</option>
                           ))}
                         </select>
                       )}
                     </div>
+
+                    {remoteFolderKind === 'local-folder' && remoteFolderId && (
+                      <div>
+                        <label style={{ fontSize: 12.5, display: 'block', marginBottom: 4 }}>Destination</label>
+                        {/* Breadcrumb: shortcut root + each drilled-into subpath segment, all clickable. */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4, fontSize: 12, marginBottom: 6 }}>
+                          <button
+                            className="btn small"
+                            style={{ padding: '2px 8px' }}
+                            disabled={!remoteSubPath}
+                            onClick={() => setRemoteSubPath('')}
+                          >
+                            {peerFolders.find((f) => f.id === remoteFolderId)?.name ?? 'Root'}
+                          </button>
+                          {remoteSubPath &&
+                            remoteSubPath.split('/').map((segment, i, segments) => {
+                              const crumbPath = segments.slice(0, i + 1).join('/');
+                              const isLast = i === segments.length - 1;
+                              return (
+                                <React.Fragment key={crumbPath}>
+                                  <span style={{ color: 'var(--text-tertiary)' }}>/</span>
+                                  <button
+                                    className="btn small"
+                                    style={{ padding: '2px 8px' }}
+                                    disabled={isLast}
+                                    onClick={() => setRemoteSubPath(crumbPath)}
+                                  >
+                                    {segment}
+                                  </button>
+                                </React.Fragment>
+                              );
+                            })}
+                        </div>
+
+                        <div
+                          className="select-field"
+                          style={{ width: '100%', maxHeight: 180, overflowY: 'auto', padding: 6, display: 'flex', flexDirection: 'column', gap: 2 }}
+                        >
+                          {browseLoading ? (
+                            <div className="empty-state">Loading…</div>
+                          ) : browseError ? (
+                            <div style={{ color: 'var(--offline)', fontSize: 11.5, padding: 4 }}>{browseError}</div>
+                          ) : browseFolders.length === 0 && !newFolderOpen ? (
+                            <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', padding: 4 }}>No subfolders here — syncing into this folder</div>
+                          ) : (
+                            browseFolders.map((f) => (
+                              <button
+                                key={f.path}
+                                className="btn small"
+                                style={{ justifyContent: 'flex-start', textAlign: 'left' }}
+                                onClick={() => setRemoteSubPath(f.path)}
+                              >
+                                📁 {f.name}
+                              </button>
+                            ))
+                          )}
+
+                          {newFolderOpen ? (
+                            <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                              <input
+                                className="select-field"
+                                style={{ flex: 1 }}
+                                autoFocus
+                                placeholder="New folder name"
+                                value={newFolderName}
+                                onChange={(e) => setNewFolderName(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') createRemoteFolder();
+                                  if (e.key === 'Escape') { setNewFolderOpen(false); setNewFolderName(''); }
+                                }}
+                              />
+                              <button className="btn small primary" disabled={!newFolderName.trim() || creatingFolder} onClick={createRemoteFolder}>
+                                {creatingFolder ? 'Creating…' : 'Create'}
+                              </button>
+                              <button className="btn small" onClick={() => { setNewFolderOpen(false); setNewFolderName(''); }}>Cancel</button>
+                            </div>
+                          ) : (
+                            <button className="btn small" style={{ marginTop: 4, alignSelf: 'flex-start' }} onClick={() => setNewFolderOpen(true)}>
+                              + New Folder
+                            </button>
+                          )}
+                        </div>
+
+                        <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 6 }}>
+                          Syncs into {peerFolders.find((f) => f.id === remoteFolderId)?.name}
+                          {remoteSubPath ? ` / ${remoteSubPath.split('/').join(' / ')}` : ''}
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </>

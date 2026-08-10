@@ -8,6 +8,8 @@ import type { MenuItem } from '../components/DropdownMenu';
 import { DropdownMenu } from '../components/DropdownMenu';
 import { ContextMenu } from '../components/ContextMenu';
 import { PreviewModal } from '../components/PreviewModal';
+import { MarqueeRect } from '../components/MarqueeRect';
+import { useMarqueeSelect } from '../lib/useMarqueeSelect';
 import { RenameModal } from '../components/RenameModal';
 import { DestinationPickerModal } from '../components/DestinationPickerModal';
 import { ProviderPickerModal } from '../components/ProviderPickerModal';
@@ -127,6 +129,8 @@ export function FilesView({
   const [openWithApps, setOpenWithApps] = useState<Record<string, { name: string; path: string }[]>>({});
   const [openWithPrefs, setOpenWithPrefs] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectAnchor, setSelectAnchor] = useState<string | null>(null);
+  const marqueeSelect = useMarqueeSelect(() => selected, setSelected);
   const [previewRow, setPreviewRow] = useState<Row | null>(null);
   const [activeRow, setActiveRow] = useState<Row | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ pos: { top: number; left: number }; row: Row } | null>(null);
@@ -238,18 +242,24 @@ export function FilesView({
     return list;
   }, [rows, query, sortKey, sortDir, category, providerFilter, typeFilter, sourceFilter, deviceBackupFolders]);
 
+  // Spacebar previews the single selected file — image/video only, matching what PreviewModal actually
+  // renders inline now (everything else opens straight in its app, see handleOpen/menuItemsFor).
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.code !== 'Space') return;
       const tag = (document.activeElement?.tagName ?? '').toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
-      if (!activeRow) return;
+      if (selected.size !== 1) return;
+      const row = filtered.find((r) => selected.has(r.uid));
+      if (!row) return;
+      const cat = broadCategorize(row.path, row.mimeType);
+      if (cat !== 'image' && cat !== 'video') return;
       e.preventDefault();
-      setPreviewRow((cur) => (cur ? null : activeRow));
+      setPreviewRow((cur) => (cur ? null : row));
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [activeRow]);
+  }, [selected, filtered]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -265,6 +275,28 @@ export function FilesView({
       next.has(uid) ? next.delete(uid) : next.add(uid);
       return next;
     });
+  }
+
+  // Finder-style click selection: plain click selects ONLY this row (replaces whatever was selected),
+  // Cmd/Ctrl-click toggles this row into/out of the existing selection, Shift-click selects the
+  // contiguous range from the last plain/cmd click (selectAnchor) through this row.
+  function selectOnClick(e: React.MouseEvent, uid: string) {
+    if (e.shiftKey && selectAnchor) {
+      const ids = filtered.map((r) => r.uid);
+      const a = ids.indexOf(selectAnchor);
+      const b = ids.indexOf(uid);
+      if (a !== -1 && b !== -1) {
+        const [start, end] = a < b ? [a, b] : [b, a];
+        setSelected(new Set(ids.slice(start, end + 1)));
+        return;
+      }
+    }
+    if (e.metaKey || e.ctrlKey) {
+      toggleRow(uid);
+    } else {
+      setSelected(new Set([uid]));
+    }
+    setSelectAnchor(uid);
   }
 
   function openPreview(r: Row) {
@@ -519,11 +551,17 @@ export function FilesView({
         </div>
       )}
 
-      {!loading && filtered.length === 0 && <div className="empty-state glass-card">No files match "{query}"</div>}
+      {!loading && filtered.length === 0 && (
+        <div className="empty-state glass-card">{query ? `No files match "${query}"` : 'No Files Here'}</div>
+      )}
 
       {!loading && filtered.length > 0 && layout === 'list' && (
         <div className="table-wrap glass-card">
-          <div className="table-scroll">
+          <div
+            className="table-scroll"
+            ref={(el) => { marqueeSelect.containerRef.current = el; }}
+            onMouseDown={marqueeSelect.onMouseDown}
+          >
             <table className="files">
               <thead>
                 <tr>
@@ -548,8 +586,13 @@ export function FilesView({
                 {filtered.map((r) => (
                   <tr
                     key={r.uid}
-                    className={activeRow === r ? 'row-active' : ''}
+                    data-select-id={r.uid}
+                    className={selected.has(r.uid) || activeRow === r ? 'row-active' : ''}
                     onClick={(e) => {
+                      if ((e.target as HTMLElement).tagName === 'INPUT') return;
+                      selectOnClick(e, r.uid);
+                    }}
+                    onDoubleClick={(e) => {
                       if ((e.target as HTMLElement).tagName === 'INPUT') return;
                       handleOpen(r);
                     }}
@@ -582,13 +625,19 @@ export function FilesView({
       )}
 
       {!loading && filtered.length > 0 && layout === 'grid' && (
-        <div className="folder-grid">
+        <div
+          className="folder-grid"
+          ref={(el) => { marqueeSelect.containerRef.current = el; }}
+          onMouseDown={marqueeSelect.onMouseDown}
+        >
           {filtered.map((r) => (
             <div
               key={r.uid}
-              className="folder-card glass-card"
+              data-select-id={r.uid}
+              className={`folder-card glass-card${selected.has(r.uid) ? ' selected' : ''}`}
               style={{ position: 'relative' }}
-              onClick={() => handleOpen(r)}
+              onClick={(e) => selectOnClick(e, r.uid)}
+              onDoubleClick={() => handleOpen(r)}
               onContextMenu={(e) => {
                 e.preventDefault();
                 setActiveRow(r);
@@ -611,6 +660,8 @@ export function FilesView({
         </div>
       )}
 
+      <MarqueeRect rect={marqueeSelect.marquee} />
+
       <ContextMenu
         pos={ctxMenu?.pos ?? null}
         items={ctxMenu ? menuItemsFor(ctxMenu.row) : []}
@@ -618,7 +669,12 @@ export function FilesView({
       />
 
       {previewRow && (
-        <PreviewModal file={toPreviewTarget(previewRow)} apiBase={API_BASE} onClose={() => setPreviewRow(null)} />
+        <PreviewModal
+          file={toPreviewTarget(previewRow)}
+          apiBase={API_BASE}
+          onClose={() => setPreviewRow(null)}
+          onOpenInApp={() => openInApp(previewRow)}
+        />
       )}
 
       {pending?.kind === 'rename' && (

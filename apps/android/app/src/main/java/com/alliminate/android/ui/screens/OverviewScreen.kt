@@ -62,19 +62,19 @@ fun OverviewScreen(onOpenDrawer: () -> Unit, onNavigate: (String) -> Unit = {}) 
     val master = Prefs.primaryMaster
     val host = master?.host
     val token = master?.token
-    val name = master?.name
     val context = LocalContext.current
+    val masters = Prefs.pairedMasters
 
-    var masterOnline by remember { mutableStateOf<Boolean?>(null) }
+    var onlineById by remember { mutableStateOf<Map<String, Boolean?>>(emptyMap()) }
     var accounts by remember { mutableStateOf<List<AccountInfo>?>(null) }
 
-    LaunchedEffect(host, token) {
-        if (host == null || token == null) {
-            masterOnline = null
+    LaunchedEffect(masters.toList()) {
+        if (masters.isEmpty()) {
+            onlineById = emptyMap()
             return@LaunchedEffect
         }
         while (true) {
-            masterOnline = MasterApi.ping(host, token)
+            onlineById = Prefs.pairedMasters.toList().associate { it.id to MasterApi.ping(it.host, it.token) }
             delay(OVERVIEW_PING_INTERVAL_MS)
         }
     }
@@ -99,36 +99,40 @@ fun OverviewScreen(onOpenDrawer: () -> Unit, onNavigate: (String) -> Unit = {}) 
         } else {
             GlobalSearchBar(host, token)
 
-            GlassCard {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onNavigate("devices") }
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    IconBadge(Icons.Filled.Devices)
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Paired with ${name ?: "Master Device"}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            val online = masterOnline
-                            StatusDot(
-                                when (online) {
-                                    true -> LocalAllieMinateColors.current.online
-                                    false -> LocalAllieMinateColors.current.offline
-                                    null -> LocalAllieMinateColors.current.onSurfaceTertiary
-                                },
-                            )
-                            Text(
-                                when (online) {
-                                    true -> "Online"
-                                    false -> "Offline"
-                                    null -> "Checking…"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = LocalAllieMinateColors.current.onSurfaceSecondary,
-                            )
+            // One card per paired Mac/PC — each taps straight into that device's own detail screen
+            // (platform logo, live battery, Explore/Send Files, Settings), not the generic Devices list.
+            masters.forEach { m ->
+                GlassCard {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigate("device_detail/${m.id}") }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        IconBadge(Icons.Filled.Devices)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Paired with ${m.name}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                val online = onlineById[m.id]
+                                StatusDot(
+                                    when (online) {
+                                        true -> LocalAllieMinateColors.current.online
+                                        false -> LocalAllieMinateColors.current.offline
+                                        null -> LocalAllieMinateColors.current.onSurfaceTertiary
+                                    },
+                                )
+                                Text(
+                                    when (online) {
+                                        true -> "Online"
+                                        false -> "Offline"
+                                        null -> "Checking…"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = LocalAllieMinateColors.current.onSurfaceSecondary,
+                                )
+                            }
                         }
                     }
                 }

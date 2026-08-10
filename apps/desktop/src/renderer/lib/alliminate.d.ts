@@ -24,6 +24,8 @@ declare global {
       composeMailWithAttachments: (params: { to: string; subject: string; body: string; attachmentPaths: string[] }) => Promise<{ ok: boolean; error?: string }>;
       getPathForFile: (file: File) => string;
       onTrayState: (cb: (state: unknown) => void) => () => void;
+      readClipboardText: () => Promise<string>;
+      writeClipboardText: (text: string) => Promise<void>;
     };
   }
 }

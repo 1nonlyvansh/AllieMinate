@@ -325,6 +325,15 @@ function handleFilesDropped(filePaths: string[], kind: 'cloud' | 'device' | 'nea
   showDropPanel();
 }
 
+// Entry point for the macOS Share Extension handoff (see main/shareExtension.ts) — same drop panel a
+// Finder drag onto the tray icon already opens, just pre-seeded with the extension's file paths and
+// locked to the single target kind the user picked from the Share menu ("Share to Connected Devices" ->
+// 'device', "Add to Cloud Service" -> 'cloud') instead of drop-files' always-'both'.
+export function openDropPanelFor(filePaths: string[], kind: 'cloud' | 'device'): void {
+  if (!tray) return; // tray isn't created yet (very early app launch) — the caller retries once it is.
+  handleFilesDropped(filePaths, kind);
+}
+
 function cancelDrop(): void {
   pendingDropFiles = null;
   pendingDropKind = 'both';

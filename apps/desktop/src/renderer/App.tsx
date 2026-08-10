@@ -14,6 +14,7 @@ import { DevicesView } from './views/DevicesView';
 import { ShareView } from './views/ShareView';
 import { TrashView } from './views/TrashView';
 import { SettingsView } from './views/SettingsView';
+import { AboutView } from './views/AboutView';
 import { SyncView } from './views/SyncView';
 import { LockScreen } from './components/LockScreen';
 import { OnboardingScreen } from './components/OnboardingScreen';
@@ -45,10 +46,35 @@ export function App(): JSX.Element {
   const refreshRef = useRef<() => void>(() => {});
   const refreshDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshFailures = useRef(0);
+  // Universal Clipboard — the last value this app itself either wrote (a remote push landed) or already
+  // broadcast (this device's own copy already went out) — the poll loop below compares against this, not
+  // "whatever the OS clipboard held last tick," specifically so a remote push never gets echoed straight
+  // back out as if it were a brand-new local copy.
+  const lastClipboardValue = useRef<string | null>(null);
+  // Read fresh on every play instead of stored in React state — this is checked from inside a WebSocket
+  // message handler, and a ref avoids that closure ever seeing a stale toggle value from when it was set up.
+  const alertSoundsEnabled = useRef(true);
 
   useEffect(() => {
     window.security.isEnabled().then(setLocked);
   }, []);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/settings/alert-sounds`)
+      .then((res) => res.json())
+      .then((data) => { alertSoundsEnabled.current = data.enabled !== false; })
+      .catch(() => {});
+  }, []);
+
+  function playAlertSound(name: 'Notification.mp3' | 'Phone Connected.mp3' | 'Phone Disconnected.mp3'): void {
+    if (!alertSoundsEnabled.current) return;
+    try {
+      const audio = new Audio(`${API_BASE}/settings/alert-sounds/file/${encodeURIComponent(name)}`);
+      audio.play().catch(() => {}); // file missing/not-yet-placed by the user — silent no-op, not an error banner
+    } catch {
+      // Audio unsupported — nothing to fall back to.
+    }
+  }
 
   // this fetch had no timeout — if the backend accepted the connection but was slow to respond (a slow
   // cold-boot sync pass, a hung upstream provider call, anything short of the process actually crashing,
@@ -167,6 +193,27 @@ export function App(): JSX.Element {
             scheduleRefresh();
             return;
           }
+          // a paired device's online/offline status just finished a background re-check (see
+          // cachedDeviceStatus in devices.ts) — not file activity, just fresher device state, so refetch
+          // silently instead of cluttering the Activity feed with it.
+          if (event.type === 'device-status-updated') {
+            const payload = event.payload as { online: boolean; deviceName?: string; platform?: string; transition?: boolean };
+            // Only a real online<->offline flip (never the first-ever check) and only for a paired Android
+            // phone — the user asked for this specifically for "the Paired Android," not Mac/Windows peers,
+            // and the backend already collapses repeated flapping into one edge-triggered event so no
+            // separate debounce is needed here.
+            if (payload.transition && payload.platform === 'android' && payload.deviceName) {
+              const verb = payload.online ? 'Connected' : 'Disconnected';
+              try {
+                new Notification(`${payload.deviceName} ${verb}`);
+              } catch {
+                // Notification unsupported/blocked — sound below still plays.
+              }
+              playAlertSound(payload.online ? 'Phone Connected.mp3' : 'Phone Disconnected.mp3');
+            }
+            scheduleRefresh();
+            return;
+          }
           // someone on the LAN wants to send THIS device a file via Nearby Share — no prior pairing, so
           // this is the actual consent step (see /nearby/request on the backend). Only surfaces while the
           // app window is open; there's no OS-level notification path for this yet.
@@ -182,6 +229,15 @@ export function App(): JSX.Element {
             setIncomingUnlockRequest(payload);
             return;
           }
+          // a paired device (with Universal Clipboard on, on both sides) just copied something — write it
+          // into this Mac/PC's own OS clipboard. lastClipboardValue guards the poll loop below from
+          // immediately re-detecting this exact write as a fresh LOCAL copy and bouncing it right back out.
+          if (event.type === 'clipboard-updated') {
+            const payload = event.payload as { text: string; from?: string };
+            lastClipboardValue.current = payload.text;
+            window.alliminate.writeClipboardText(payload.text).catch(() => {});
+            return;
+          }
           // a paired device just pushed a file straight into this Mac/PC's own inbox (device-to-device
           // Share, from either another AllieMinate desktop or a phone's share-sheet) — a real OS
           // notification for this, not just an Activity feed line, since the whole point is the user
@@ -194,6 +250,7 @@ export function App(): JSX.Element {
             } catch {
               // Notification unsupported/blocked — the Activity feed entry below still shows it.
             }
+            playAlertSound('Notification.mp3');
           }
           const key = typeof event.payload === 'object' && event.payload && 'key' in event.payload
             ? String((event.payload as { key: unknown }).key)
@@ -250,6 +307,29 @@ export function App(): JSX.Element {
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (refreshDebounceTimer.current) clearTimeout(refreshDebounceTimer.current);
       ws?.close();
+    };
+  }, []);
+
+  // Universal Clipboard — polls the OS clipboard (via the main-process IPC bridge, see preload.ts; the
+  // backend has no Electron API of its own to do this directly) and broadcasts a real change to every
+  // paired device with the toggle on. The backend itself decides who (if anyone) actually receives it —
+  // this always broadcasts on a genuine local change, no need to pre-check any device list here.
+  useEffect(() => {
+    let cancelled = false;
+    const interval = setInterval(async () => {
+      if (cancelled) return;
+      const text = await window.alliminate.readClipboardText().catch(() => null);
+      if (text == null || !text || text === lastClipboardValue.current) return;
+      lastClipboardValue.current = text;
+      fetch(`${API_BASE}/clipboard/broadcast`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      }).catch(() => {});
+    }, 1500);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
     };
   }, []);
 
@@ -346,7 +426,7 @@ export function App(): JSX.Element {
         {view === 'cat-archive' && <FilesView folders={folders} filesByFolder={filesByFolder} storage={storage} loading={loading} onRefresh={() => refreshRef.current()} category="archive" title="Archives" subtitle="ZIP and archive files across your connected clouds" clipboard={clipboard} onClipboardChange={setClipboard} />}
         {view === 'pinned' && <PinnedFoldersView folders={folders} filesByFolder={filesByFolder} storage={storage} openRequest={pinnedOpenRequest} loading={loading} onRefresh={() => refreshRef.current()} clipboard={clipboard} onClipboardChange={setClipboard} />}
         {view === 'sync' && <SyncView storage={storage} activity={activity} />}
-        {view === 'cloud-services' && <CloudServicesView connected={status?.providers ?? []} loading={loading} folders={folders} storage={storage} clipboard={clipboard} onClipboardChange={setClipboard} onOpenPinnedFolder={openFolder} onOpenSync={() => setView('sync')} />}
+        {view === 'cloud-services' && <CloudServicesView connected={status?.providers ?? []} loading={loading} folders={folders} storage={storage} clipboard={clipboard} onClipboardChange={setClipboard} onOpenPinnedFolder={openFolder} onOpenSync={() => setView('sync')} onOpenSettings={() => setView('settings')} />}
         {view === 'google-photos' && <GooglePhotosView />}
         {view === 'devices' && <DevicesView clipboard={clipboard} onClipboardChange={setClipboard} />}
         {view === 'share' && <ShareView />}
@@ -354,6 +434,7 @@ export function App(): JSX.Element {
         {view === 'settings' && (
           <SettingsView connected={status?.providers ?? []} storage={storage} onRefresh={() => refreshRef.current()} onGoToDevices={() => setView('devices')} />
         )}
+        {view === 'about' && <AboutView />}
       </main>
 
       {uploadOpen && (

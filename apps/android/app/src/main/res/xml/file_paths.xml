@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <external-files-path name="offline" path="offline/" />
+    <!-- Covers the whole shared-storage root (DCIM, Documents, any Sync Pair's local folder) — needed so
+         a FileProvider content:// Uri can be granted for "open this Sync Pair's folder in your file
+         manager", since a Sync Pair's localPath can live anywhere under external storage, not just this
+         app's own sandboxed offline/ folder above. -->
+    <external-path name="external" path="." />
+    <!-- A downloaded-for-preview video gets cached here before handing it to the system video player via
+         a FileProvider content:// Uri (the player app can't read a plain file:// path across the app
+         sandbox boundary). -->
+    <cache-path name="preview" path="." />
 </paths>

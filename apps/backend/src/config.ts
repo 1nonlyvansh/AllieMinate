@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
-import path from 'node:path';
+import { envPath } from './paths';
 
-dotenv.config({ path: path.join(__dirname, '../../../.env') });
+dotenv.config({ path: envPath() });
 
 export interface S3CompatConfig {
   endpoint: string;

@@ -17,6 +17,12 @@ data class PairedMaster(
     val token: String,
     val name: String,
     val platform: String,
+    // Per-master, phone-controlled settings (device detail screen's Settings section) — both default to
+    // the pre-existing behavior so nothing changes for a master paired before these existed: any paired
+    // master could already browse this phone's files (no gate existed), and clipboard sync doesn't exist
+    // yet so it starts off everywhere.
+    val shareFilesWithMaster: Boolean = true,
+    val universalClipboardEnabled: Boolean = false,
 )
 
 /** Persists this phone's own identity (sent as `requester` during pairing) and every Master Device this
@@ -78,6 +84,8 @@ object Prefs {
                 token = o.getString("token"),
                 name = o.getString("name"),
                 platform = o.getString("platform"),
+                shareFilesWithMaster = if (o.has("shareFilesWithMaster")) o.getBoolean("shareFilesWithMaster") else true,
+                universalClipboardEnabled = o.optBoolean("universalClipboardEnabled", false),
             )
         }
     }
@@ -92,6 +100,8 @@ object Prefs {
                     put("token", m.token)
                     put("name", m.name)
                     put("platform", m.platform)
+                    put("shareFilesWithMaster", m.shareFilesWithMaster)
+                    put("universalClipboardEnabled", m.universalClipboardEnabled)
                 }
             )
         }
@@ -169,6 +179,31 @@ object Prefs {
         val index = pairedMasters.indexOfFirst { it.id == masterId }
         if (index < 0) return
         pairedMasters[index] = pairedMasters[index].copy(host = host)
+        persistMasters()
+    }
+
+    /** Local nickname override for a paired master — this phone's own label for it, doesn't touch the
+     * Mac/PC's actual system name or anything it reports about itself. */
+    fun renameMaster(masterId: String, newName: String) {
+        val index = pairedMasters.indexOfFirst { it.id == masterId }
+        if (index < 0 || newName.isBlank()) return
+        pairedMasters[index] = pairedMasters[index].copy(name = newName.trim())
+        persistMasters()
+    }
+
+    /** Gates whether THIS master's token can browse this phone's files — enforced in LocalHttpServer.kt.
+     * Off by default requires nothing (every master starts allowed, see PairedMaster's default). */
+    fun setShareFilesWithMaster(masterId: String, enabled: Boolean) {
+        val index = pairedMasters.indexOfFirst { it.id == masterId }
+        if (index < 0) return
+        pairedMasters[index] = pairedMasters[index].copy(shareFilesWithMaster = enabled)
+        persistMasters()
+    }
+
+    fun setUniversalClipboardEnabled(masterId: String, enabled: Boolean) {
+        val index = pairedMasters.indexOfFirst { it.id == masterId }
+        if (index < 0) return
+        pairedMasters[index] = pairedMasters[index].copy(universalClipboardEnabled = enabled)
         persistMasters()
     }
 

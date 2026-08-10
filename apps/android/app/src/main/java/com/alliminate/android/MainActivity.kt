@@ -41,6 +41,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.compose.ui.platform.LocalContext
+import com.alliminate.android.ui.screens.AboutScreen
 import com.alliminate.android.ui.screens.CategoryFilesScreen
 import com.alliminate.android.data.ApiResult
 import com.alliminate.android.data.ContinuityHolder
@@ -57,6 +58,7 @@ import com.alliminate.android.data.SharedFileHolder
 import com.alliminate.android.data.SyncActivityStore
 import com.alliminate.android.data.SyncFileStateStore
 import com.alliminate.android.data.SyncPairStore
+import com.alliminate.android.data.UniversalSyncInviteStore
 import com.alliminate.android.notifications.TransferNotifications
 import com.alliminate.android.service.LocalServerService
 import com.alliminate.android.ui.components.AppDrawer
@@ -65,6 +67,7 @@ import com.alliminate.android.ui.components.OnboardingScreen
 import com.alliminate.android.ui.components.UsbPairConfirmScreen
 import com.alliminate.android.ui.nav.Screen
 import com.alliminate.android.ui.screens.CloudServicesScreen
+import com.alliminate.android.ui.screens.DeviceDetailScreen
 import com.alliminate.android.ui.screens.DevicesScreen
 import com.alliminate.android.ui.screens.OverviewScreen
 import com.alliminate.android.ui.screens.SettingsScreen
@@ -83,6 +86,7 @@ class MainActivity : FragmentActivity() {
         SyncPairStore.init(this)
         SyncFileStateStore.init(this)
         SyncActivityStore.init(this)
+        UniversalSyncInviteStore.init(this)
         // Resumes periodic sync after an app/device restart — without this, sync would only ever start
         // right after the user creates a pair in the current session (SyncScreen's onCreated callback).
         if (SyncPairStore.list().any { it.status == "active" }) SyncPushScheduler.start(this)
@@ -339,10 +343,33 @@ private fun AllieMinateContent() {
                     val category = backStack.arguments?.getString("category") ?: "image"
                     CategoryFilesScreen(category = category, onBack = { navController.popBackStack() })
                 }
-                composable(Screen.Devices.route) { DevicesScreen(onOpenDrawer = { scope.launch { drawerState.open() } }) }
+                composable(Screen.Devices.route) {
+                    DevicesScreen(
+                        onOpenDrawer = { scope.launch { drawerState.open() } },
+                        onDeviceClick = { master -> navController.navigate("device_detail/${master.id}") { launchSingleTop = true } },
+                    )
+                }
+                composable(
+                    "device_detail/{masterId}",
+                    arguments = listOf(navArgument("masterId") { type = NavType.StringType }),
+                ) { backStack ->
+                    val masterId = backStack.arguments?.getString("masterId")
+                    val master = Prefs.masterById(masterId)
+                    if (master == null) {
+                        navController.popBackStack()
+                    } else {
+                        DeviceDetailScreen(master = master, onBack = { navController.popBackStack() })
+                    }
+                }
                 composable(Screen.CloudServices.route) { CloudServicesScreen(onOpenDrawer = { scope.launch { drawerState.open() } }) }
                 composable(Screen.Share.route) { ShareScreen(onOpenDrawer = { scope.launch { drawerState.open() } }) }
-                composable(Screen.Settings.route) { SettingsScreen(onOpenDrawer = { scope.launch { drawerState.open() } }) }
+                composable(Screen.Settings.route) {
+                    SettingsScreen(
+                        onOpenDrawer = { scope.launch { drawerState.open() } },
+                        onOpenAbout = { navController.navigate("about") { launchSingleTop = true } },
+                    )
+                }
+                composable("about") { AboutScreen(onBack = { navController.popBackStack() }) }
                 composable(Screen.Sync.route) { SyncScreen(onOpenDrawer = { scope.launch { drawerState.open() } }) }
             }
         }

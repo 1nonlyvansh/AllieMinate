@@ -1,4 +1,4 @@
-import Fastify, { FastifyInstance } from 'fastify';
+import Fastify, { FastifyInstance, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
 import websocketPlugin from '@fastify/websocket';
 import type { FolderConfig, SyncEvent } from '@alliminate/shared';
@@ -7,7 +7,11 @@ import type { StorageBackend } from '../storage/StorageBackend';
 import { syncEvents, emitSyncEvent } from '../events';
 import { loadTrash, saveTrash, withoutTrash } from '../trash';
 import { loadDriveAccounts, saveDriveAccounts } from '../accounts';
+import { loadPrimaryDriveLabelOverride, savePrimaryDriveLabelOverride } from '../primaryDriveLabel';
+import { setProviderDisabled } from '../disabledProviders';
 import { saveFolders } from '../sync/folders';
+import { uniqueRemotePrefix } from '../sync/remotePrefix';
+import { listSyncPairs } from '../sync/syncPairs';
 import { registerProviderRoutes } from './providers';
 import { registerDeviceRoutes } from './devices';
 import { registerLocalOpenRoutes } from './localOpen';
@@ -18,6 +22,7 @@ import { registerLogRoutes } from './logs';
 import { registerSyncPairRoutes } from './syncPairs';
 import { registerUniversalSyncRoutes } from './universalSync';
 import { registerLocalFolderRoutes } from './localFolders';
+import { registerClipboardRoutes } from './clipboard';
 import { findByToken } from '../pairing';
 import { loadMasterDeviceEnabled } from '../masterDevice';
 import { logTransfer, loadTransferHistory, removeTransferEntry, renameTransferFile, findTransferEntry } from '../transferHistory';
@@ -83,6 +88,7 @@ interface StorageEntry {
   usedBytes: number;
   totalBytes?: number;
   label?: string;
+  error?: string;
 }
 
 // module-level (not per-request) so the cache survives across every /storage call for the life of the
@@ -92,12 +98,77 @@ interface StorageEntry {
 const storageCache = new Map<string, StorageEntry>();
 const storageRefreshing = new Set<string>();
 const storageFailedAt = new Map<string, number>();
+// separate from storageCache (which only ever holds a REAL, successful usage number) — an account that has
+// never once succeeded (most commonly a revoked/expired OAuth grant) gets a friendly error entry here
+// instead, so the cooldown early-return above still has something to serve besides null (which used to
+// mean the account just silently vanished from /storage's response for the whole cooldown window).
+const storageErrorCache = new Map<string, StorageEntry>();
 // a provider that's genuinely broken right now (e.g. a real account-level API quota/transaction cap
 // exceeded, seen live on B2) used to get re-hit on literally EVERY /storage poll forever, since a failure
 // was never cached — with several surfaces polling (main window, tray, devices view) that's a live API
 // call every few seconds, which for an already-capped account just keeps failing and burns the day's
 // quota further. Skip retrying a provider that failed recently instead of hammering it every poll.
 const STORAGE_FAILURE_COOLDOWN_MS = 5 * 60 * 1000;
+
+// The primary Google Drive account (configured via .env, so it has no entry in driveAccounts.json the way
+// every OTHER linked account does) needs its real email resolved via a live API call — without this it fell
+// back to the generic "Google Drive" label everywhere: the sidebar's account row, AND (until this shared
+// cache existed) it was being resolved a SECOND time independently inside the /accounts handler below and
+// pushed into that route's own account list — which is exactly what made the primary account show up
+// twice in Settings, once as the generic top-level provider card and again as its own resolved-email row.
+// One shared cache, used by both /storage and /accounts, fixes both symptoms at once.
+let primaryDriveLabel: string | undefined; // retried until it succeeds once, then cached
+let primaryDriveLabelFailedAt: number | undefined;
+const PRIMARY_DRIVE_FAILURE_COOLDOWN_MS = 5 * 60 * 1000;
+
+async function resolvePrimaryDriveLabel(backends: Map<string, StorageBackend>): Promise<string | undefined> {
+  const override = loadPrimaryDriveLabelOverride();
+  if (override) return override;
+  const inCooldown = primaryDriveLabelFailedAt !== undefined && Date.now() - primaryDriveLabelFailedAt < PRIMARY_DRIVE_FAILURE_COOLDOWN_MS;
+  if (primaryDriveLabel || inCooldown) return primaryDriveLabel;
+  const backend = backends.get('google-drive');
+  if (!backend?.getAccountEmail) return undefined;
+  try {
+    // the primary account's refresh token predates account labels and was only ever consented with Drive
+    // scope, not userinfo.email — any oauth2/userinfo call 401s no matter how it's made. Drive's own
+    // about.get already returns the account owner's email and needs no extra scope.
+    primaryDriveLabel = (await backend.getAccountEmail()) ?? undefined;
+    primaryDriveLabelFailedAt = undefined;
+  } catch (err) {
+    // a REVOKED refresh token (invalid_grant) can never succeed — back off after a failure instead of
+    // re-attempting (and re-logging a multi-hundred-line gaxios error) on every single call forever, the
+    // same "never cache a failure" shape that once made B2's transaction-cap error hammer the app.
+    console.error(`primary Drive account email lookup failed: ${err instanceof Error ? err.message : String(err)}`);
+    primaryDriveLabelFailedAt = Date.now();
+  }
+  return primaryDriveLabel;
+}
+
+/** Streams a file straight through when the backend supports it (Drive, S3-compatible today), falling back
+ * to the old buffer-then-send path otherwise. The buffered path pays the remote fetch time TWICE in a row —
+ * once to pull the whole file into memory here, once to push it back out to the renderer — before the
+ * client sees a single byte; streaming overlaps those two legs instead, which is most of why a preview used
+ * to sit on "Loading preview…" for a while even on a fast connection. */
+// A revoked/expired OAuth grant surfaces from googleapis as a raw "invalid_grant" error — left uncaught,
+// Fastify's default error handler serializes it as {statusCode,error:"Bad Request",message:"invalid_grant"}
+// and the renderer reads the WRONG field (data.error, which is just the generic HTTP status text "Bad
+// Request"), so the actually-useful detail in .message never reaches the user. Route through this so the
+// real, friendly reason lands in .error where every other route's caller already looks for it.
+function friendlyProviderError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  if (message.includes('invalid_grant')) return "This account's access expired — reconnect it in Settings";
+  return message;
+}
+
+async function sendFile(backend: StorageBackend, key: string, reply: FastifyReply): Promise<unknown> {
+  reply.header('Content-Type', 'application/octet-stream');
+  if (backend.getStream) {
+    const stream = await backend.getStream(key);
+    return reply.send(stream);
+  }
+  const data = await backend.get(key);
+  return reply.send(data);
+}
 
 async function refreshProviderStorage(
   accountId: string,
@@ -108,9 +179,11 @@ async function refreshProviderStorage(
   // /storage requests a second apart, both finding a stale-but-present cache entry) would otherwise kick
   // off a duplicate lookup against the same slow provider for no benefit — the one already running will
   // populate the cache for both.
-  if (storageRefreshing.has(accountId)) return storageCache.get(accountId) ?? null;
+  if (storageRefreshing.has(accountId)) return storageCache.get(accountId) ?? storageErrorCache.get(accountId) ?? null;
   const failedAt = storageFailedAt.get(accountId);
-  if (failedAt && Date.now() - failedAt < STORAGE_FAILURE_COOLDOWN_MS) return storageCache.get(accountId) ?? null;
+  if (failedAt && Date.now() - failedAt < STORAGE_FAILURE_COOLDOWN_MS) {
+    return storageCache.get(accountId) ?? storageErrorCache.get(accountId) ?? null;
+  }
   storageRefreshing.add(accountId);
   try {
     const real = backend.getAccountUsage ? await backend.getAccountUsage().catch(() => null) : null;
@@ -123,6 +196,7 @@ async function refreshProviderStorage(
       entry = { provider: accountId, usedBytes, totalBytes: PROVIDER_QUOTA_BYTES[baseProviderOf(accountId)], label: labelFor(accountId) };
     }
     storageCache.set(accountId, entry);
+    storageErrorCache.delete(accountId);
     storageFailedAt.delete(accountId);
     // tells the renderer's WebSocket listener to refetch /storage — same "something changed, go refresh"
     // mechanism file-synced events already use. Harmless to fire even when nothing visually changed (a
@@ -130,9 +204,20 @@ async function refreshProviderStorage(
     emitSyncEvent({ type: 'storage-updated', folderId: accountId, payload: entry });
     return entry;
   } catch (err) {
-    console.error(`storage usage lookup failed for ${accountId}:`, err instanceof Error ? err.message : err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`storage usage lookup failed for ${accountId}:`, message);
     storageFailedAt.set(accountId, Date.now());
-    return storageCache.get(accountId) ?? null;
+    const cached = storageCache.get(accountId);
+    if (cached) return cached; // had a real number before — keep showing it rather than an error card
+    // never succeeded even once (most commonly a revoked/expired OAuth grant — "invalid_grant") — show
+    // the account with a clear reconnect message instead of silently dropping it from the list, which is
+    // what returning null here used to do (get filtered out of /storage's response entirely).
+    const friendly = message.includes('invalid_grant')
+      ? 'Access expired — reconnect this account in Settings'
+      : "Couldn't reach this account — reconnect it in Settings if this keeps happening";
+    const entry: StorageEntry = { provider: accountId, usedBytes: 0, totalBytes: 0, label: labelFor(accountId), error: friendly };
+    storageErrorCache.set(accountId, entry);
+    return entry;
   } finally {
     storageRefreshing.delete(accountId);
   }
@@ -178,6 +263,7 @@ export async function buildServer(
   registerSyncPairRoutes(app, backends);
   registerUniversalSyncRoutes(app, backends);
   registerLocalFolderRoutes(app);
+  registerClipboardRoutes(app);
 
   app.get('/status', async () => ({
     ok: true,
@@ -235,8 +321,14 @@ export async function buildServer(
       return { folder, cloudFolderCreated: false };
     }
 
-    const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'folder';
-    const remotePrefix = `${slug}-${crypto.randomUUID().slice(0, 6)}`;
+    // "Sync/<name>" — a real nested folder (Drive) or key prefix (every other provider) instead of the old
+    // opaque "<slug>-<random hex>", so the file's actual cloud location reads the same as it does in this
+    // app. Checked against every OTHER folder AND every freestanding Sync Pair on this account (both write
+    // into the same managed cloud root), not just this route's own registry.
+    const remotePrefix = uniqueRemotePrefix('Sync', name, [
+      ...folders.map((f) => f.remotePrefix),
+      ...listSyncPairs().map((p) => p.remotePath),
+    ]);
 
     let cloudFolderCreated = false;
     if (createInCloud && backend.createVisibleFolder) {
@@ -336,7 +428,7 @@ export async function buildServer(
   // instead of over the LAN.
   app.get<{ Querystring: { limit?: string } }>('/local/recent', async (req) => {
     const limit = Math.min(50, Number(req.query.limit ?? 10) || 10);
-    return { files: listLocalRecentFiles(limit) };
+    return { files: await listLocalRecentFiles(limit) };
   });
 
   app.get<{ Querystring: { path?: string } }>('/local/download', async (req, reply) => {
@@ -573,9 +665,7 @@ export async function buildServer(
       const key = req.query.key;
       if (!key) return reply.code(400).send({ error: 'missing ?key=' });
 
-      const data = await backend.get(key);
-      reply.header('Content-Type', 'application/octet-stream');
-      return reply.send(data);
+      return sendFile(backend, key, reply);
     },
   );
 
@@ -817,7 +907,9 @@ export async function buildServer(
 
   app.get('/storage', async () => {
     const driveAccounts = loadDriveAccounts();
-    const labelFor = (accountId: string) => driveAccounts.find((a) => a.accountId === accountId)?.label;
+    const primaryLabel = await resolvePrimaryDriveLabel(backends);
+    const labelFor = (accountId: string) =>
+      accountId === 'google-drive' ? primaryLabel : driveAccounts.find((a) => a.accountId === accountId)?.label;
 
     // Promise.all already runs every provider's usage lookup CONCURRENTLY — the actual bottleneck was
     // that the whole /storage RESPONSE waited for the slowest one to settle (a cold MEGA login taking its
@@ -842,43 +934,30 @@ export async function buildServer(
     return { providers };
   });
 
-  // extra linked Google Drive accounts, plus the primary one (configured via .env, so it has no entry in
-  // driveAccounts.json — without this it fell back to the generic "Google Drive" label everywhere instead
-  // of its real email, unlike every other linked account).
-  let primaryDriveLabel: string | undefined; // retried until it succeeds once, then cached
-  let primaryDriveLabelFailedAt: number | undefined;
-  // a REVOKED refresh token (invalid_grant — the user re-authorized elsewhere, or Google expired it) can
-  // never succeed, but this route used to retry it on literally every single /accounts call forever, each
-  // attempt logging a multi-hundred-line gaxios error object — the exact same "never cache a failure"
-  // shape that made B2's transaction-cap error hammer the app earlier. Same fix: back off after a failure
-  // instead of re-attempting every call.
-  const PRIMARY_DRIVE_FAILURE_COOLDOWN_MS = 5 * 60 * 1000;
+  // Extra linked Google Drive accounts (accountId ":N"-suffixed) plus, where resolvable, the primary
+  // account's own real label — used by Android's share/backup account picker, which genuinely does want
+  // every account (including the primary one) labeled in one flat list. Settings' UI is the one place that
+  // must NOT treat this array as a flat list of "extra" accounts to render — the primary entry
+  // (accountId === 'google-drive') is the SAME account its own top-level provider card already represents.
   app.get('/accounts', async () => {
     const accounts = loadDriveAccounts().map((a) => ({ accountId: a.accountId, label: a.label, provider: 'google-drive' }));
-
-    const primaryDriveBackend = backends.get('google-drive');
-    const inCooldown = primaryDriveLabelFailedAt && Date.now() - primaryDriveLabelFailedAt < PRIMARY_DRIVE_FAILURE_COOLDOWN_MS;
-    if (config.googleDrive && primaryDriveBackend?.getAccountEmail && !inCooldown) {
-      if (!primaryDriveLabel) {
-        // the primary account's refresh token predates account labels and was only ever consented with
-        // Drive scope, not userinfo.email — any oauth2/userinfo call 401s no matter how it's made.
-        // Drive's own about.get already returns the account owner's email and needs no extra scope.
-        try {
-          primaryDriveLabel = (await primaryDriveBackend.getAccountEmail()) ?? undefined;
-          primaryDriveLabelFailedAt = undefined;
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          console.error(`primary Drive account email lookup failed: ${message}`);
-          primaryDriveLabelFailedAt = Date.now();
-        }
-      }
-      if (primaryDriveLabel) accounts.push({ accountId: 'google-drive', label: primaryDriveLabel, provider: 'google-drive' });
+    if (config.googleDrive) {
+      const primaryLabel = await resolvePrimaryDriveLabel(backends);
+      if (primaryLabel) accounts.push({ accountId: 'google-drive', label: primaryLabel, provider: 'google-drive' });
     }
-
     return { accounts };
   });
 
   app.delete<{ Params: { id: string } }>('/accounts/:id', async (req, reply) => {
+    // the primary account (bare "google-drive", from .env) has no entry in driveAccounts.json — "Remove"
+    // on its own row means the same thing the top-level card's "Log Out" button already does: disconnect
+    // it (credentials stay in .env, same as every other provider's disconnect route).
+    if (req.params.id === 'google-drive') {
+      backends.delete('google-drive');
+      setProviderDisabled('google-drive', true);
+      emitSyncEvent({ type: 'status', folderId: '', payload: { provider: 'google-drive', connected: false } });
+      return { ok: true };
+    }
     const accounts = loadDriveAccounts();
     if (!accounts.some((a) => a.accountId === req.params.id)) {
       return reply.code(404).send({ error: 'account not found' });
@@ -898,6 +977,11 @@ export async function buildServer(
   app.patch<{ Params: { id: string }; Body: { label: string } }>('/accounts/:id', async (req, reply) => {
     const label = req.body?.label?.trim();
     if (!label) return reply.code(400).send({ error: 'missing label' });
+
+    if (req.params.id === 'google-drive') {
+      savePrimaryDriveLabelOverride(label);
+      return { ok: true };
+    }
 
     const accounts = loadDriveAccounts();
     const account = accounts.find((a) => a.accountId === req.params.id);
@@ -930,9 +1014,7 @@ export async function buildServer(
     const backend = backends.get(req.params.id);
     if (!backend) return reply.code(404).send({ error: 'provider not connected' });
 
-    const data = await backend.get(req.query.key);
-    reply.header('Content-Type', 'application/octet-stream');
-    return reply.send(data);
+    return sendFile(backend, req.query.key, reply);
   });
 
   // Finder-style upload destination picker — browse the account's REAL folder tree (not AllieMinate's
@@ -942,8 +1024,12 @@ export async function buildServer(
     if (!backend) return reply.code(404).send({ error: 'provider not connected' });
     if (!backend.browseFolder) return reply.code(409).send({ error: 'folder browsing not supported for this provider' });
 
-    const { folders, files } = await backend.browseFolder(req.query.folderId || null);
-    return { folders, files: withoutTrash(files) };
+    try {
+      const { folders, files } = await backend.browseFolder(req.query.folderId || null);
+      return { folders, files: withoutTrash(files) };
+    } catch (err) {
+      return reply.code(502).send({ error: friendlyProviderError(err) });
+    }
   });
 
   app.post<{ Params: { id: string }; Body: { parentId?: string; name: string } }>(

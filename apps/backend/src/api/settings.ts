@@ -1,11 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import fs from 'node:fs';
+import path from 'node:path';
 import { loadMasterDeviceEnabled, setMasterDeviceEnabled } from '../masterDevice';
 import { loadReceivePath, saveReceivePath, defaultReceivePath } from '../receiveSettings';
 import { loadUsername, saveUsername } from '../username';
 import { loadNearbyShareEnabled, setNearbyShareEnabled } from '../nearbyShare';
 import { loadBandwidthLimit, saveBandwidthLimit } from '../sync/bandwidthThrottle';
 import { loadTrayFilterProvider } from '../trayFilter';
+import { loadAlertSoundsEnabled, setAlertSoundsEnabled, loadSoundsFolder, saveSoundsFolder, defaultSoundsFolder } from '../soundsSettings';
 
 export function registerSettingsRoutes(app: FastifyInstance): void {
   app.get('/settings/master-device', async () => ({ enabled: loadMasterDeviceEnabled() }));
@@ -53,4 +55,35 @@ export function registerSettingsRoutes(app: FastifyInstance): void {
   // POSTs here anymore: the tray persists a new selection as a side effect of its own /recent?provider=
   // fetch (see server.ts), so the selector and the effect are always in sync with no separate save step.
   app.get('/settings/tray-filter', async () => ({ providerId: loadTrayFilterProvider() }));
+
+  app.get('/settings/alert-sounds', async () => ({ enabled: loadAlertSoundsEnabled(), folder: loadSoundsFolder(), default: defaultSoundsFolder() }));
+
+  app.post<{ Body: { enabled: boolean } }>('/settings/alert-sounds', async (req) => {
+    setAlertSoundsEnabled(req.body.enabled === true);
+    return { ok: true, enabled: req.body.enabled === true };
+  });
+
+  app.post<{ Body: { folder: string } }>('/settings/alert-sounds/folder', async (req, reply) => {
+    const newFolder = req.body.folder?.trim();
+    if (!newFolder) return reply.code(400).send({ error: 'missing folder' });
+    saveSoundsFolder(newFolder);
+    return { ok: true, folder: newFolder };
+  });
+
+  // Serves one of the 3 fixed alert sound files straight off disk so the renderer can just point an
+  // <audio> element at this URL — no direct filesystem/file:// access needed from the renderer, and it
+  // works identically once ported to Windows since the folder is resolved server-side per-OS.
+  const ALLOWED_SOUND_NAMES = new Set(['Notification.mp3', 'Phone Connected.mp3', 'Phone Disconnected.mp3']);
+  app.get<{ Params: { name: string } }>('/settings/alert-sounds/file/:name', async (req, reply) => {
+    const name = decodeURIComponent(req.params.name);
+    if (!ALLOWED_SOUND_NAMES.has(name)) return reply.code(404).send({ error: 'not found' });
+    const filePath = path.join(loadSoundsFolder(), name);
+    try {
+      const data = await fs.promises.readFile(filePath);
+      reply.header('Content-Type', 'audio/mpeg');
+      return reply.send(data);
+    } catch {
+      return reply.code(404).send({ error: 'sound file not found' });
+    }
+  });
 }

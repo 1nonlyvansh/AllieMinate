@@ -7,6 +7,7 @@ import com.alliminate.android.data.Prefs
 import com.alliminate.android.data.SyncActivityStore
 import com.alliminate.android.data.SyncFileStateStore
 import com.alliminate.android.data.SyncPairStore
+import com.alliminate.android.data.UniversalSyncInviteStore
 
 class AllieMinateApplication : Application() {
     override fun onCreate() {
@@ -28,5 +29,6 @@ class AllieMinateApplication : Application() {
         SyncPairStore.init(this)
         SyncFileStateStore.init(this)
         SyncActivityStore.init(this)
+        UniversalSyncInviteStore.init(this)
     }
 }

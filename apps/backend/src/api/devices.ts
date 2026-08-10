@@ -1,6 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import crypto from 'node:crypto';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import WebSocket from 'ws';
 import { getDeviceIdentity, getLanAddress } from '../device';
 import { getCachedPath, addToCache } from '../cache';
 import { categoryForFile, extFromMime, loadOpenWithPrefs } from '../openWith';
@@ -19,6 +22,16 @@ import { loadMasterDeviceEnabled } from '../masterDevice';
 import { logTransfer } from '../transferHistory';
 import type { StorageBackend } from '../storage/StorageBackend';
 import { getNearbyPeers } from '../nearbyDiscovery';
+import { emitSyncEvent } from '../events';
+
+// A cloud storage key is always forward-slash (S3-style) regardless of this backend's own OS, but a
+// device-local key (the 'local' folderId family — a peer's own Desktop/Documents/etc, see
+// fetchDeviceRecentFiles below) is a real filesystem path from whatever OS that PEER runs. A Windows
+// peer's key is backslash-separated, and a plain split('/') leaves the whole path as the "name" instead of
+// just the filename — split on either separator so both shapes reduce to a filename correctly.
+function basename(key: string): string {
+  return key.split(/[/\\]/).pop() ?? key;
+}
 
 const PING_TIMEOUT_MS = 4000;
 
@@ -115,6 +128,59 @@ export async function isOnline(
   };
 }
 
+// GET /devices and /devices/recent each independently await isOnline() for every paired device before
+// responding — fine when everything's reachable, but a single offline device (a Windows box that's asleep,
+// a phone with WiFi off) burns the full PING_TIMEOUT_MS on EVERY call, and Overview/the Devices page/the
+// tray all poll this on their own separate schedules, so that timeout gets paid over and over, not once.
+// Same fix as /storage's refreshProviderStorage: serve the last-known status immediately (even if it's
+// about to be refreshed), refresh for real in the background, and emit a sync event so the UI can refetch
+// once the fresh result lands — only a device that's NEVER been checked even once in this process has
+// nothing to serve yet and has to be awaited inline.
+type DeviceStatus = Awaited<ReturnType<typeof isOnline>>;
+const deviceStatusCache = new Map<string, DeviceStatus>();
+const deviceStatusRefreshing = new Set<string>();
+
+async function refreshDeviceStatus(deviceId: string, host: string, token: string): Promise<DeviceStatus> {
+  // a refresh for this exact device is already in flight (e.g. two /devices requests a second apart, both
+  // finding a stale-but-present cache entry) — the one already running will populate the cache for both,
+  // no benefit to a duplicate lookup against the same peer.
+  if (deviceStatusRefreshing.has(deviceId)) {
+    return deviceStatusCache.get(deviceId) ?? { online: false, nearbyShareEnabled: false, hasOwnClouds: false, masterDeviceEnabled: false };
+  }
+  deviceStatusRefreshing.add(deviceId);
+  try {
+    const status = await isOnline(deviceId, host, token);
+    const prev = deviceStatusCache.get(deviceId);
+    deviceStatusCache.set(deviceId, status);
+    if (!prev || prev.online !== status.online) {
+      // `transition: true` only when there was a previous cached value that actually flipped — the
+      // renderer uses this to fire a "Connected"/"Disconnected" OS notification, and a bare first-ever
+      // check of this device in this process (prev === undefined, e.g. right after backend startup) isn't
+      // a real transition worth notifying about, just this process catching up to reality.
+      const device = loadPairedDevices().find((d) => d.id === deviceId);
+      emitSyncEvent({
+        type: 'device-status-updated',
+        folderId: deviceId,
+        payload: { ...status, deviceName: device?.name, platform: device?.platform, transition: !!prev },
+      });
+    }
+    return status;
+  } finally {
+    deviceStatusRefreshing.delete(deviceId);
+  }
+}
+
+/** Cache-first status for a paired device — instant on every call after the first ever check of this
+ * device in this process, since it never blocks on the network once something's cached. */
+async function cachedDeviceStatus(deviceId: string, host: string, token: string): Promise<DeviceStatus> {
+  const cached = deviceStatusCache.get(deviceId);
+  if (cached) {
+    refreshDeviceStatus(deviceId, host, token); // fire-and-forget, updates cache + emits when done
+    return cached;
+  }
+  return refreshDeviceStatus(deviceId, host, token);
+}
+
 export interface DeviceRecentFile {
   deviceId: string;
   deviceName: string;
@@ -147,6 +213,34 @@ async function fetchWithTimeout(url: string, token: string): Promise<Response | 
 }
 
 export async function fetchDeviceRecentFiles(device: PairedDevice): Promise<DeviceRecentFile[]> {
+  // A Mac/Windows peer's "recent files" should mean what it means for THIS device too — its own real
+  // Desktop/Documents/Downloads/Pictures/Movies/Music, not the cloud-provider folders it happens to have
+  // connected. That peer runs this exact backend, so it already has the allowlist-filtered, fs.watch-backed
+  // /local/recent endpoint (see localFiles.ts) — proxy straight to it instead of the folder fan-out below,
+  // which was built for Android (whose "recent files" genuinely are its MediaStore-backed cloud-style
+  // folders) and never made sense applied to a peer that has its own real local filesystem.
+  // folderId is the literal string 'local' here, matched by the /devices/:id/folders/:folderId/download
+  // route below to proxy to this same peer's /local/download instead of a cloud folder's /download.
+  if (device.platform !== 'android') {
+    try {
+      const res = await fetchWithTimeout(`http://${device.host}/local/recent?limit=6`, device.token);
+      if (!res) return [];
+      const data = await res.json();
+      const files: { path: string; name: string; size: number; modifiedAt: string; mimeType?: string }[] = data.files ?? [];
+      return files.map((f) => ({
+        deviceId: device.id,
+        deviceName: device.name,
+        folderId: 'local',
+        path: f.path,
+        size: f.size,
+        modifiedAt: f.modifiedAt,
+        mimeType: f.mimeType,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
   try {
     const statusRes = await fetchWithTimeout(`http://${device.host}/status`, device.token);
     if (!statusRes) return [];
@@ -178,10 +272,55 @@ export async function fetchDeviceRecentFiles(device: PairedDevice): Promise<Devi
   }
 }
 
+const execFileAsync = promisify(execFile);
+
+// Powers the Android per-device detail screen's live battery indicator — `pmset -g batt` is the same
+// source macOS's own menu bar battery reads from. Windows reads the same thing via Win32_Battery over
+// WMI/CIM — untested on a real Windows machine (this dev box is a Mac), so treat this branch as
+// unverified until confirmed on Windows; report unsupported (null) rather than crash if the command
+// itself fails on some Windows configuration this wasn't tested against.
+async function readBattery(): Promise<{ percent: number; charging: boolean } | null> {
+  if (process.platform === 'darwin') {
+    try {
+      const { stdout } = await execFileAsync('pmset', ['-g', 'batt']);
+      const percentMatch = stdout.match(/(\d+)%/);
+      if (!percentMatch) return null; // desktop Mac with no battery
+      return { percent: parseInt(percentMatch[1], 10), charging: stdout.includes("'AC Power'") };
+    } catch {
+      return null;
+    }
+  }
+  if (process.platform === 'win32') {
+    try {
+      // BatteryStatus 2 == "AC power" (Win32_Battery's own enum — 1 is "discharging", 2 is "on AC/charging").
+      const { stdout } = await execFileAsync('powershell', [
+        '-NoProfile',
+        '-Command',
+        'Get-CimInstance Win32_Battery | Select-Object -First 1 EstimatedChargeRemaining,BatteryStatus | ConvertTo-Json -Compress',
+      ]);
+      const trimmed = stdout.trim();
+      if (!trimmed) return null; // desktop PC with no battery — Win32_Battery returns nothing
+      const parsed = JSON.parse(trimmed);
+      const percent = parsed.EstimatedChargeRemaining;
+      if (typeof percent !== 'number') return null;
+      return { percent, charging: parsed.BatteryStatus === 2 };
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string, StorageBackend>): void {
   app.get('/device-info', async () => {
     const me = getDeviceIdentity();
     return { ...me, lanAddress: getLanAddress() };
+  });
+
+  app.get('/battery', async (_req, reply) => {
+    const battery = await readBattery();
+    if (!battery) return reply.code(404).send({ error: 'battery info not available on this device' });
+    return battery;
   });
 
   app.post('/pair/start', async (_req, reply) => {
@@ -288,7 +427,7 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
     const paired = loadPairedDevices();
     const withStatus = await Promise.all(
       paired.map(async (d) => {
-        const status = await isOnline(d.id, d.host, d.token);
+        const status = await cachedDeviceStatus(d.id, d.host, d.token);
         return {
           id: d.id,
           name: d.name,
@@ -299,6 +438,7 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
           nearbyShareEnabled: status.nearbyShareEnabled,
           hasOwnClouds: status.hasOwnClouds,
           masterDeviceEnabled: status.masterDeviceEnabled,
+          universalClipboardEnabled: d.universalClipboardEnabled === true,
         };
       }),
     );
@@ -322,7 +462,7 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
   app.get('/devices/recent', async () => {
     const paired = loadPairedDevices();
     const onlineDevices = (
-      await Promise.all(paired.map(async (d) => ({ device: d, status: await isOnline(d.id, d.host, d.token) })))
+      await Promise.all(paired.map(async (d) => ({ device: d, status: await cachedDeviceStatus(d.id, d.host, d.token) })))
     )
       .filter((d) => d.status.online)
       .map((d) => d.device);
@@ -369,15 +509,19 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
     return { ok: true };
   });
 
-  app.patch<{ Params: { id: string }; Body: { name: string } }>('/devices/:id', async (req, reply) => {
-    const name = req.body?.name?.trim();
-    if (!name) return reply.code(400).send({ error: 'missing name' });
-
+  app.patch<{ Params: { id: string }; Body: { name?: string; universalClipboardEnabled?: boolean } }>('/devices/:id', async (req, reply) => {
     const devices = loadPairedDevices();
     const device = devices.find((d) => d.id === req.params.id);
     if (!device) return reply.code(404).send({ error: 'device not paired' });
 
-    device.name = name;
+    if (req.body?.name !== undefined) {
+      const name = req.body.name.trim();
+      if (!name) return reply.code(400).send({ error: 'missing name' });
+      device.name = name;
+    }
+    if (req.body?.universalClipboardEnabled !== undefined) {
+      device.universalClipboardEnabled = req.body.universalClipboardEnabled;
+    }
     savePairedDevices(devices);
     return { ok: true };
   });
@@ -431,16 +575,19 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
       if (!peer) return reply.code(404).send({ error: 'device not paired' });
 
       try {
-        const res = await fetch(
-          `http://${peer.host}/folders/${req.params.folderId}/download?key=${encodeURIComponent(req.query.key)}`,
-          { headers: { Authorization: `Bearer ${peer.token}` } },
-        );
+        // 'local' is the sentinel fetchDeviceRecentFiles uses for a Mac/Windows peer's own local files
+        // (see above) — key is that peer's real filesystem path, served by its own /local/download,
+        // not a cloud-folder key served by /folders/:id/download.
+        const upstreamUrl = req.params.folderId === 'local'
+          ? `http://${peer.host}/local/download?path=${encodeURIComponent(req.query.key)}`
+          : `http://${peer.host}/folders/${req.params.folderId}/download?key=${encodeURIComponent(req.query.key)}`;
+        const res = await fetch(upstreamUrl, { headers: { Authorization: `Bearer ${peer.token}` } });
         if (!res.ok) return reply.code(502).send({ error: 'device unreachable' });
         const buf = Buffer.from(await res.arrayBuffer());
         logTransfer({
           deviceId: peer.id,
           deviceName: peer.name,
-          fileName: req.query.key.split('/').pop() ?? req.query.key,
+          fileName: basename(req.query.key),
           direction: 'received',
           size: buf.length,
           path: 'Downloads (saved by browser)',
@@ -453,17 +600,27 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
     },
   );
 
-  // Mac Sync tab's "Sync from Device" section — relays a paired phone's own Sync Pairs (its half of the
-  // Android Sync Engine) the exact same way the existing /devices/:id/folders trio relays MediaStore
-  // categories. Three routes, one per phone-side route: list pairs, list a pair's files, download one.
+  // Devices > "Cloud" tab — relays a paired device's own Sync Pairs (Sync Engine + Universal Sync, both
+  // of which store as SyncPair records) the exact same way the /devices/:id/local-folders trio relays a
+  // real filesystem. Android's LocalHttpServer registers this family at the bare path /sync-pairs; the
+  // Mac/Windows backend (this exact codebase, running as the peer) registers its own copy at /sync/pairs
+  // instead — same feature, different route prefix per platform.
+  function syncPairsUpstreamPath(peer: PairedDevice): string {
+    return peer.platform === 'android' ? '/sync-pairs' : '/sync/pairs';
+  }
+
   app.get<{ Params: { id: string } }>('/devices/:id/sync-pairs', async (req, reply) => {
     const peer = findPeer(req.params.id);
     if (!peer) return reply.code(404).send({ error: 'device not paired' });
 
     try {
-      const res = await fetch(`http://${peer.host}/sync-pairs`, { headers: { Authorization: `Bearer ${peer.token}` } });
+      const res = await fetch(`http://${peer.host}${syncPairsUpstreamPath(peer)}`, { headers: { Authorization: `Bearer ${peer.token}` } });
       if (!res.ok) return reply.code(502).send({ error: 'device unreachable' });
-      return res.json();
+      const data = await res.json();
+      // Cloud tab reuses the same {folders:[...]} shape every other device-browsing route already
+      // returns — both platforms' own sync-pair list route calls the field `pairs`, so rename it here
+      // once instead of teaching the frontend two different field names for the same tab.
+      return { folders: data.pairs ?? [] };
     } catch (err) {
       return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -474,11 +631,16 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
     if (!peer) return reply.code(404).send({ error: 'device not paired' });
 
     try {
-      const res = await fetch(`http://${peer.host}/sync-pairs/${req.params.pairId}/files`, {
+      const res = await fetch(`http://${peer.host}${syncPairsUpstreamPath(peer)}/${req.params.pairId}/files`, {
         headers: { Authorization: `Bearer ${peer.token}` },
       });
       if (!res.ok) return reply.code(502).send({ error: 'device unreachable' });
-      return res.json();
+      const data = await res.json();
+      // The Mac/Windows backend's own sync-pair files route names the field relPath (it doubles as a
+      // sync-state record); Android's names it path. Normalize to path so this family looks identical to
+      // /folders and /local-folders regardless of which platform the peer turns out to be.
+      const files = (data.files ?? []).map((f: Record<string, unknown>) => ({ ...f, path: f.path ?? f.relPath }));
+      return { files };
     } catch (err) {
       return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -492,7 +654,7 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
 
       try {
         const res = await fetch(
-          `http://${peer.host}/sync-pairs/${req.params.pairId}/download?key=${encodeURIComponent(req.query.key)}`,
+          `http://${peer.host}${syncPairsUpstreamPath(peer)}/${req.params.pairId}/download?key=${encodeURIComponent(req.query.key)}`,
           { headers: { Authorization: `Bearer ${peer.token}` } },
         );
         if (!res.ok) return reply.code(502).send({ error: 'device unreachable' });
@@ -500,7 +662,7 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
         logTransfer({
           deviceId: peer.id,
           deviceName: peer.name,
-          fileName: req.query.key.split('/').pop() ?? req.query.key,
+          fileName: basename(req.query.key),
           direction: 'received',
           size: buf.length,
           path: 'Downloads (saved by browser)',
@@ -534,7 +696,7 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
       if (!peer) return reply.code(404).send({ error: 'device not paired' });
       try {
         const filePath = await resolveDeviceCachedPath(peer, req.params.pairId, req.body.key, req.body.mimeType, 'sync-pair');
-        const name = req.body.key.split('/').pop() ?? req.body.key;
+        const name = basename(req.body.key);
         const category = categoryForFile(name, req.body.mimeType);
         const appPath = category ? loadOpenWithPrefs()[category] : undefined;
         openLocalFile(filePath, appPath, (err) => app.log.error(err, 'failed to open device file'));
@@ -636,6 +798,26 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
     },
   );
 
+  app.post<{ Params: { id: string; folderId: string }; Body: { path?: string; name: string } }>(
+    '/devices/:id/local-folders/:folderId/mkdir',
+    async (req, reply) => {
+      const peer = findPeer(req.params.id);
+      if (!peer) return reply.code(404).send({ error: 'device not paired' });
+      try {
+        const res = await fetch(`http://${peer.host}/local-folders/${req.params.folderId}/mkdir`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${peer.token}` },
+          body: JSON.stringify(req.body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) return reply.code(res.status === 400 ? 400 : 502).send(data);
+        return data;
+      } catch (err) {
+        return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) });
+      }
+    },
+  );
+
   app.get<{ Params: { id: string; folderId: string }; Querystring: { key: string } }>(
     '/devices/:id/local-folders/:folderId/download',
     async (req, reply) => {
@@ -651,7 +833,7 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
         logTransfer({
           deviceId: peer.id,
           deviceName: peer.name,
-          fileName: req.query.key.split('/').pop() ?? req.query.key,
+          fileName: basename(req.query.key),
           direction: 'received',
           size: buf.length,
           path: 'Downloads (saved by browser)',
@@ -757,7 +939,7 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
       if (!peer) return reply.code(404).send({ error: 'device not paired' });
       try {
         const filePath = await resolveDeviceCachedPath(peer, req.params.folderId, req.body.key, req.body.mimeType, 'local-folder');
-        const name = req.body.key.split('/').pop() ?? req.body.key;
+        const name = basename(req.body.key);
         const category = categoryForFile(name, req.body.mimeType);
         const appPath = category ? loadOpenWithPrefs()[category] : undefined;
         openLocalFile(filePath, appPath, (err) => app.log.error(err, 'failed to open device local file'));
@@ -789,7 +971,7 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
         );
         if (!res.ok) return reply.code(502).send({ error: 'device unreachable' });
         const data = Buffer.from(await res.arrayBuffer());
-        const name = key.split('/').pop() ?? key;
+        const name = basename(key);
         await backend.putInFolder(destFolderId ?? null, name, data);
         return { ok: true, name, size: data.length };
       } catch (err) {
@@ -811,13 +993,15 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
     const cached = getCachedPath(providerKey, key);
     if (cached) return cached;
 
-    const remotePath = kind === 'sync-pair' ? `sync-pairs/${folderId}` : kind === 'local-folder' ? `local-folders/${folderId}` : `folders/${folderId}`;
+    const remotePath =
+      kind === 'sync-pair' ? `${syncPairsUpstreamPath(peer).slice(1)}/${folderId}` :
+      kind === 'local-folder' ? `local-folders/${folderId}` : `folders/${folderId}`;
     const res = await fetch(`http://${peer.host}/${remotePath}/download?key=${encodeURIComponent(key)}`, {
       headers: { Authorization: `Bearer ${peer.token}` },
     });
     if (!res.ok) throw new Error('device unreachable');
     const data = Buffer.from(await res.arrayBuffer());
-    const name = key.split('/').pop() ?? key;
+    const name = basename(key);
     const displayName = path.extname(name) ? name : `${name}${mimeType ? `.${extFromMime(mimeType) ?? 'bin'}` : ''}`;
     return addToCache(providerKey, key, data, displayName);
   }
@@ -845,7 +1029,7 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
       if (!peer) return reply.code(404).send({ error: 'device not paired' });
       try {
         const filePath = await resolveDeviceCachedPath(peer, req.params.folderId, req.body.key, req.body.mimeType);
-        const name = req.body.key.split('/').pop() ?? req.body.key;
+        const name = basename(req.body.key);
         const category = categoryForFile(name, req.body.mimeType);
         const appPath = category ? loadOpenWithPrefs()[category] : undefined;
         openLocalFile(filePath, appPath, (err) => app.log.error(err, 'failed to open device file'));
@@ -968,4 +1152,50 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
     }
     return { status: 'pending' };
   });
+}
+
+// Real-time cross-device recent-files: a Mac/Windows peer's own backend already emits
+// 'local-recent-updated' on ITS OWN /ws the instant something changes under its watched folders (see
+// localFiles.ts's startLocalRecentWatcher) — but that event only reaches clients connected to THAT peer's
+// websocket, not this device's. This backend opens an outbound connection to each such peer's /ws, listens
+// for that event, and re-emits it on this backend's own event bus as 'device-recent-updated' (tagged with
+// the peer's own device id) so the tray's DeviceRecentStrip can react to it exactly like a local change —
+// without this, a paired device's recent-files strip only ever refreshes on its own poll tick.
+const peerRecentWatchers = new Map<string, WebSocket>();
+
+function connectToPeerRecentUpdates(peer: PairedDevice): void {
+  // Android has no local-recent-updated event to relay (no equivalent local-file watcher exists there) —
+  // nothing to connect to.
+  if (peer.platform === 'android' || peerRecentWatchers.has(peer.id)) return;
+  const ws = new WebSocket(`ws://${peer.host}/ws`);
+  peerRecentWatchers.set(peer.id, ws);
+  ws.on('message', (data) => {
+    try {
+      const event = JSON.parse(data.toString());
+      if (event.type === 'local-recent-updated') {
+        emitSyncEvent({ type: 'device-recent-updated', folderId: peer.id, payload: null });
+      }
+    } catch {
+      // not JSON, or not a SyncEvent shape — ignore
+    }
+  });
+  // no reconnect-with-backoff here on purpose — syncPeerRecentWatchers() runs on an interval and will
+  // naturally reopen this connection next tick since a closed socket is removed from the map immediately.
+  ws.on('close', () => peerRecentWatchers.delete(peer.id));
+  ws.on('error', () => ws.close());
+}
+
+/** Called once at backend startup and on an interval — opens outbound watchers for any newly-paired
+ * device, retries any that dropped (peer went offline, network blip), and closes any for a device that
+ * was unpaired since the last call. */
+export function syncPeerRecentWatchers(): void {
+  const current = loadPairedDevices();
+  const currentIds = new Set(current.map((d) => d.id));
+  for (const peer of current) connectToPeerRecentUpdates(peer);
+  for (const [id, ws] of peerRecentWatchers) {
+    if (!currentIds.has(id)) {
+      ws.close();
+      peerRecentWatchers.delete(id);
+    }
+  }
 }

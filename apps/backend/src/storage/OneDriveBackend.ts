@@ -113,19 +113,29 @@ export class OneDriveBackend implements StorageBackend {
   }
 
   private async walk(folderPath: string, prefix: string, out: { path: string; item: GraphItem }[]): Promise<void> {
-    let data;
-    try {
-      data = await this.call('GET', `/me/drive/root:${folderPath}:/children`);
-    } catch {
-      return;
-    }
-    for (const item of (data.value ?? []) as GraphItem[]) {
-      const path = prefix + item.name;
-      if (item.folder) {
-        await this.walk(`${folderPath}/${item.name}`, `${path}/`, out);
-      } else {
-        out.push({ path, item });
+    // A missing folder (404 — this path was never synced yet) is genuinely empty and safe to treat as such.
+    // Anything else (auth expired, rate limited, network blip) must NOT look like "empty" to the caller —
+    // reconcileFolder reads an empty listing as "everything here was deleted remotely" and deletes the
+    // local copies to match. Only the 404 case is swallowed; every other error propagates.
+    let url: string | null = `/me/drive/root:${folderPath}:/children?$top=200`;
+    while (url) {
+      let data: any;
+      try {
+        data = await this.call('GET', url);
+      } catch (err) {
+        if (err instanceof Error && /: 404\b/.test(err.message)) return;
+        throw err;
       }
+      for (const item of (data.value ?? []) as GraphItem[]) {
+        const path = prefix + item.name;
+        if (item.folder) {
+          await this.walk(`${folderPath}/${item.name}`, `${path}/`, out);
+        } else {
+          out.push({ path, item });
+        }
+      }
+      const next: string | undefined = data['@odata.nextLink'];
+      url = next ? next.replace(GRAPH, '') : null;
     }
   }
 

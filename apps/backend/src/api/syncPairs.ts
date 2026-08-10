@@ -4,6 +4,8 @@ import crypto from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { StorageBackend } from '../storage/StorageBackend';
 import { createSyncPair, deleteSyncPair, getSyncPair, listSyncPairs, updateSyncPair } from '../sync/syncPairs';
+import { uniqueRemotePrefix } from '../sync/remotePrefix';
+import { loadFolders } from '../sync/folders';
 import { startSyncPair, stopSyncPairWatch, isSyncPaused, pauseAutoSyncForFolder, resumeAutoSyncForFolder } from '../sync/engine';
 import { loadSyncState, deleteSyncState } from '../sync/syncState';
 import { getSyncProgress } from '../sync/twoWaySync';
@@ -112,6 +114,44 @@ export function registerSyncPairRoutes(app: FastifyInstance, backends: Map<strin
     }
   });
 
+  // Add: a paired device (Android's own remote browser for one of THIS Mac's Sync Pairs) drops a new file
+  // straight into the pair's synced folder — same "just write to disk, the live watcher picks it up and
+  // propagates" story the DELETE route above already relies on, just for a create instead of a remove.
+  app.post<{ Params: { id: string }; Querystring: { name: string; subPath?: string } }>('/sync/pairs/:id/upload', async (req, reply) => {
+    const pair = getSyncPair(req.params.id);
+    if (!pair) return reply.code(404).send({ error: 'sync pair not found' });
+    const name = req.query.name;
+    if (!name) return reply.code(400).send({ error: 'missing ?name=' });
+    const key = req.query.subPath ? `${req.query.subPath}/${name}` : name;
+    const filePath = resolvePairFile(pair.localPath, key);
+    if (!filePath) return reply.code(403).send({ error: 'path not allowed' });
+    const data = req.body as Buffer;
+    await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.promises.writeFile(filePath, data);
+    return { ok: true, key, size: data.length };
+  });
+
+  // Move: relocate a file to a different subfolder within the same pair — distinct from the rename route
+  // above, which only ever changes the filename in place and explicitly rejects a slash in newName.
+  app.post<{ Params: { id: string }; Body: { key: string; newSubPath: string } }>('/sync/pairs/:id/move', async (req, reply) => {
+    const pair = getSyncPair(req.params.id);
+    if (!pair) return reply.code(404).send({ error: 'sync pair not found' });
+    const { key, newSubPath } = req.body ?? {};
+    if (!key) return reply.code(400).send({ error: 'missing key' });
+    const oldPath = resolvePairFile(pair.localPath, key);
+    const name = key.split('/').pop() ?? key;
+    const newKey = newSubPath ? `${newSubPath}/${name}` : name;
+    const newPath = resolvePairFile(pair.localPath, newKey);
+    if (!oldPath || !newPath) return reply.code(403).send({ error: 'path not allowed' });
+    try {
+      await fs.promises.mkdir(path.dirname(newPath), { recursive: true });
+      await fs.promises.rename(oldPath, newPath);
+      return { ok: true, key: newKey };
+    } catch {
+      return reply.code(404).send({ error: 'file not found' });
+    }
+  });
+
   app.post<{
     Body: {
       name: string;
@@ -130,9 +170,16 @@ export function registerSyncPairRoutes(app: FastifyInstance, backends: Map<strin
       deviceId?: string;
       remoteFolderId?: string;
       remoteFolderKind?: 'folder' | 'local-folder';
+      // relative subpath WITHIN remoteFolderId the picker's tree browser drilled into (e.g.
+      // "Personal/Me/Photos") — only meaningful when remoteFolderKind === 'local-folder'.
+      remoteSubPath?: string;
+      // set by CreateUniversalSyncModal — this pair is the HOST side of a Universal Sync Folder, so its
+      // cloud storage lands under "Universal Sync/<name>" instead of "Sync/<name>", matching where the
+      // Sync tab vs. the Universal Sync feature each actually put things.
+      isUniversalSync?: boolean;
     };
   }>('/sync/pairs', async (req, reply) => {
-    const { name, localPath, providerId, direction, createInCloud, createNew, deviceId, remoteFolderId, remoteFolderKind } = req.body;
+    const { name, localPath, providerId, direction, createInCloud, createNew, deviceId, remoteFolderId, remoteFolderKind, remoteSubPath, isUniversalSync } = req.body;
     if (!name?.trim()) return reply.code(400).send({ error: 'missing name' });
     if (!localPath?.trim()) return reply.code(400).send({ error: 'missing local folder' });
     if (createNew) {
@@ -151,7 +198,10 @@ export function registerSyncPairRoutes(app: FastifyInstance, backends: Map<strin
         deviceId,
         deviceFolderId: remoteFolderId,
         deviceFolderKind: remoteFolderKind ?? 'folder',
-        remotePath: '', // DeviceSyncTarget addresses files by name within the peer's folder id — no prefix concept
+        // subpath WITHIN deviceFolderId the picker's tree browser drilled into — DeviceSyncTarget passes
+        // this straight through as ?path= / a name prefix (see syncTarget.ts); '' means "that folder's
+        // top level," same as every pair created before nested destinations existed.
+        remotePath: remoteFolderKind === 'local-folder' ? (remoteSubPath ?? '') : '',
         direction: direction ?? 'two-way',
         status: 'active',
         createdAt: new Date().toISOString(),
@@ -165,11 +215,16 @@ export function registerSyncPairRoutes(app: FastifyInstance, backends: Map<strin
     const backend = backends.get(providerId);
     if (!backend) return reply.code(409).send({ error: 'provider not configured' });
 
-    // same slug+random-suffix convention as POST /folders (server.ts) — every other provider organizes
-    // storage by flat key prefix, so this is the one consistent "destination path" concept across all of
-    // them; Drive additionally gets a real visible folder object when createInCloud is set.
-    const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'sync';
-    const remotePath = `${slug}-${crypto.randomUUID().slice(0, 6)}`;
+    // same "Sync/<name>" / "Universal Sync/<name>" convention as POST /folders (server.ts) — Drive gets a
+    // real nested folder for it, every other provider a real key prefix that already looked like one;
+    // Drive additionally gets a real VISIBLE folder object elsewhere in "My Drive" when createInCloud is
+    // set (createVisibleFolder), unrelated to this managed-storage path. Checked against every other Sync
+    // Pair AND every pinned/Auto-Sync FolderConfig on this account, since both write into the same managed
+    // cloud root.
+    const remotePath = uniqueRemotePrefix(isUniversalSync ? 'Universal Sync' : 'Sync', name, [
+      ...listSyncPairs().map((p) => p.remotePath),
+      ...loadFolders().map((f) => f.remotePrefix),
+    ]);
 
     if (createInCloud && backend.createVisibleFolder) {
       try {

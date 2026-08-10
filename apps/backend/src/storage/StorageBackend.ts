@@ -4,6 +4,14 @@ import type { FileEntry, FolderNode } from '@alliminate/shared';
 export interface StorageBackend {
   put(key: string, data: Buffer): Promise<void>;
   get(key: string): Promise<Buffer>;
+  /** True streaming counterpart to get() — pipes remote bytes straight through to the HTTP response as
+   * they arrive, instead of buffering the whole file in Node memory before the client sees a single byte.
+   * The old buffer-then-forward path effectively pays the full remote-fetch time TWICE in a row (once to
+   * pull the file down here, once to push it back out to the renderer) — streaming overlaps the two, and
+   * lets a preview start rendering/playing well before the whole file has arrived. Only implemented where
+   * the provider's own SDK genuinely hands back a real stream; providers without one just don't implement
+   * this and callers fall back to get(). */
+  getStream?(key: string): Promise<Readable>;
   delete(key: string): Promise<void>;
   list(prefix: string): Promise<FileEntry[]>;
   /** Lists every file in the account, not just ones under this app's managed prefix. Read-only. */
