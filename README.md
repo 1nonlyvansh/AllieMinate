@@ -21,7 +21,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/1nonlyvansh/AllieMinate/ci.yml?branch=main&style=flat-square&label=CI&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/Status-Active%20Dev-1db954?style=flat-square&labelColor=050d1a)](CHANGELOG.md)
 
-[Website](https://allieminate.vercel.app/) · [Download](https://github.com/1nonlyvansh/AllieMinate/releases/latest) · [Changelog](CHANGELOG.md) · [Docs](docs/) · [Report a Bug](https://github.com/1nonlyvansh/AllieMinate/issues/new?template=bug_report.md)
+[Website](https://allieminate.app/) · [Download](https://github.com/1nonlyvansh/AllieMinate/releases/latest) · [Changelog](CHANGELOG.md) · [Docs](docs/) · [Report a Bug](https://github.com/1nonlyvansh/AllieMinate/issues/new?template=bug_report.md)
 
 </div>
 
