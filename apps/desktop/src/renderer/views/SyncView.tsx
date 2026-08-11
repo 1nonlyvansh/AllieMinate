@@ -399,7 +399,7 @@ export function SyncView({
   const [rules, setRules] = useState<string[]>([]);
   const [newRule, setNewRule] = useState('');
   const [savingRules, setSavingRules] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PairWithStatus | null>(null);
   const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
 
   // covers invites that arrived while this device was offline/closed — a live push while the app is open
@@ -475,12 +475,16 @@ export function SyncView({
     refresh();
   }
 
-  function remove(id: string, name: string) {
-    setPendingDelete({ id, name });
+  function remove(pair: PairWithStatus) {
+    setPendingDelete(pair);
   }
 
-  async function confirmDelete(id: string) {
-    await fetch(`${API_BASE}/sync/pairs/${id}`, { method: 'DELETE' });
+  async function confirmDelete(id: string, deleteCloudFolder: boolean) {
+    await fetch(`${API_BASE}/sync/pairs/${id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deleteCloudFolder }),
+    });
     setPendingDelete(null);
     refresh();
   }
@@ -645,7 +649,7 @@ export function SyncView({
                 {p.status === 'active' && p.paused && (
                   <button className="btn small" onClick={() => resume(p.id)}>Resume</button>
                 )}
-                <button className="btn small" onClick={() => remove(p.id, p.name)} title="Stop syncing">
+                <button className="btn small" onClick={() => remove(p)} title="Stop syncing">
                   <IconTrash size={13} />
                 </button>
               </div>
@@ -740,8 +744,10 @@ export function SyncView({
       {pendingDelete && (
         <DeleteSyncPairDialog
           name={pendingDelete.name}
+          showCloudOption={pendingDelete.targetKind === 'cloud' && !!pendingDelete.cloudFolderCreated}
+          accountLabel={labelFor(pendingDelete.providerId)}
           onCancel={() => setPendingDelete(null)}
-          onConfirmed={() => confirmDelete(pendingDelete.id)}
+          onConfirmed={(deleteCloudFolder) => confirmDelete(pendingDelete.id, deleteCloudFolder)}
         />
       )}
     </section>
@@ -755,7 +761,19 @@ export function SyncView({
 // Lock itself is turned on — canUseTouchID()/tryTouchID() are a pure OS capability check, not gated on
 // the app's own lock state. If neither is available on this machine (no biometric hardware AND no App
 // Lock PIN ever set), there's no extra factor to demand — falls back to the Yes/No confirmation alone.
-function DeleteSyncPairDialog({ name, onCancel, onConfirmed }: { name: string; onCancel: () => void; onConfirmed: () => void }) {
+function DeleteSyncPairDialog({
+  name,
+  showCloudOption,
+  accountLabel,
+  onCancel,
+  onConfirmed,
+}: {
+  name: string;
+  showCloudOption: boolean;
+  accountLabel: string;
+  onCancel: () => void;
+  onConfirmed: (deleteCloudFolder: boolean) => void;
+}) {
   const [stage, setStage] = useState<'confirm' | 'auth' | 'pin'>('confirm');
   const [canTouchID, setCanTouchID] = useState(false);
   // whether App Lock has ever been set up at all (a real PIN exists to check against) — distinct from
@@ -765,6 +783,7 @@ function DeleteSyncPairDialog({ name, onCancel, onConfirmed }: { name: string; o
   const [trying, setTrying] = useState(false);
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [deleteCloudFolder, setDeleteCloudFolder] = useState(false);
 
   useEffect(() => {
     Promise.all([window.security.canTouchID(), window.security.isEnabled()]).then(([can, enabled]) => {
@@ -776,13 +795,13 @@ function DeleteSyncPairDialog({ name, onCancel, onConfirmed }: { name: string; o
 
   async function onYes() {
     if (!checkedAuth) return;
-    if (!canTouchID && !hasPin) return onConfirmed(); // nothing to check against — plain confirmation stands
+    if (!canTouchID && !hasPin) return onConfirmed(deleteCloudFolder); // nothing to check against — plain confirmation stands
     if (canTouchID) {
       setStage('auth');
       setTrying(true);
       const ok = await window.security.tryTouchID();
       setTrying(false);
-      if (ok) return onConfirmed();
+      if (ok) return onConfirmed(deleteCloudFolder);
       // cancelled/failed — fall back to PIN only if one actually exists, otherwise there's no second
       // factor to offer and re-trying Touch ID in a loop isn't a real recovery path.
       if (hasPin) { setStage('pin'); return; }
@@ -794,7 +813,7 @@ function DeleteSyncPairDialog({ name, onCancel, onConfirmed }: { name: string; o
 
   async function submitPin() {
     const ok = await window.security.verifyPin(pin);
-    if (ok) return onConfirmed();
+    if (ok) return onConfirmed(deleteCloudFolder);
     setError('Wrong PIN');
     setPin('');
   }
@@ -803,7 +822,18 @@ function DeleteSyncPairDialog({ name, onCancel, onConfirmed }: { name: string; o
     <Modal title="Delete Sync Pair" onClose={onCancel}>
       {stage === 'confirm' && (
         <>
-          <p style={{ marginBottom: 20 }}>Are you sure you want to delete "{name}" from AllieMinate?</p>
+          <p style={{ marginBottom: showCloudOption ? 14 : 20 }}>Are you sure you want to delete "{name}" from AllieMinate?</p>
+          {showCloudOption && (
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 20, fontSize: 13, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={deleteCloudFolder}
+                onChange={(e) => setDeleteCloudFolder(e.target.checked)}
+                style={{ marginTop: 2 }}
+              />
+              <span>Also delete the folder from {accountLabel} (removes it and any files inside it from the cloud, not just from AllieMinate)</span>
+            </label>
+          )}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button className="btn" onClick={onCancel}>No</button>
             <button className="btn danger" onClick={onYes} disabled={!checkedAuth}>Yes</button>

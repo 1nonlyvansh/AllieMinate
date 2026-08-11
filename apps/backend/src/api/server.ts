@@ -339,7 +339,9 @@ export async function buildServer(
     let cloudFolderCreated = false;
     if (createInCloud && backend.createVisibleFolder) {
       try {
-        await backend.createVisibleFolder(name.trim());
+        // same remotePrefix this folder's own uploads actually land at — see GoogleDriveBackend's
+        // createVisibleFolder docstring for why this isn't just the bare name.
+        await backend.createVisibleFolder(remotePrefix);
         cloudFolderCreated = true;
       } catch (err) {
         return reply.code(502).send({ error: `Couldn't create the folder in the cloud: ${err instanceof Error ? err.message : String(err)}` });

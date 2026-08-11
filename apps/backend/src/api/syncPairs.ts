@@ -216,19 +216,21 @@ export function registerSyncPairRoutes(app: FastifyInstance, backends: Map<strin
     if (!backend) return reply.code(409).send({ error: 'provider not configured' });
 
     // same "Sync/<name>" / "Universal Sync/<name>" convention as POST /folders (server.ts) — Drive gets a
-    // real nested folder for it, every other provider a real key prefix that already looked like one;
-    // Drive additionally gets a real VISIBLE folder object elsewhere in "My Drive" when createInCloud is
-    // set (createVisibleFolder), unrelated to this managed-storage path. Checked against every other Sync
-    // Pair AND every pinned/Auto-Sync FolderConfig on this account, since both write into the same managed
-    // cloud root.
+    // real nested folder for it, every other provider a real key prefix that already looked like one.
+    // Checked against every other Sync Pair AND every pinned/Auto-Sync FolderConfig on this account,
+    // since both write into the same managed cloud root.
     const remotePath = uniqueRemotePrefix(isUniversalSync ? 'Universal Sync' : 'Sync', name, [
       ...listSyncPairs().map((p) => p.remotePath),
       ...loadFolders().map((f) => f.remotePrefix),
     ]);
 
+    let cloudFolderCreated = false;
     if (createInCloud && backend.createVisibleFolder) {
       try {
-        await backend.createVisibleFolder(name.trim());
+        // same remotePath the pair's own files actually land at (createVisibleFolder resolves/creates
+        // every segment of it) — the visible folder IS where uploads go, not a second empty one at root.
+        await backend.createVisibleFolder(remotePath);
+        cloudFolderCreated = true;
       } catch (err) {
         return reply.code(502).send({ error: `Couldn't create the folder in the cloud: ${err instanceof Error ? err.message : String(err)}` });
       }
@@ -245,6 +247,7 @@ export function registerSyncPairRoutes(app: FastifyInstance, backends: Map<strin
       status: 'active',
       createdAt: new Date().toISOString(),
       sourceDeviceName: getDeviceIdentity().name,
+      cloudFolderCreated,
     });
 
     startSyncPair(pair, backends);
@@ -303,14 +306,28 @@ export function registerSyncPairRoutes(app: FastifyInstance, backends: Map<strin
     return { ok: true };
   });
 
-  app.delete<{ Params: { id: string } }>('/sync/pairs/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string }; Body: { deleteCloudFolder?: boolean } }>('/sync/pairs/:id', async (req, reply) => {
     const pair = getSyncPair(req.params.id);
     if (!pair) return reply.code(404).send({ error: 'sync pair not found' });
     stopSyncPairWatch(pair.id);
+
+    // opt-in, checked explicitly in the delete-confirmation dialog — by default deleting a pair only
+    // unconfigures sync, same promise the pinned-folder Auto-Sync disable route already makes; local
+    // files are never touched either way. Best-effort: a failed cloud delete shouldn't block removing the
+    // pair itself, since the pair is already stopped and the user explicitly asked to remove it.
+    if (req.body?.deleteCloudFolder && pair.targetKind === 'cloud' && pair.providerId) {
+      const backend = backends.get(pair.providerId);
+      if (backend?.deleteVisibleFolder) {
+        try {
+          await backend.deleteVisibleFolder(pair.remotePath);
+        } catch (err) {
+          console.error(`failed to delete cloud folder for sync pair ${pair.id}:`, err instanceof Error ? err.message : String(err));
+        }
+      }
+    }
+
     deleteSyncPair(pair.id);
     deleteSyncState(pair.id);
-    // local files and any Sync Trash contents are never touched — deleting a pair only unconfigures sync,
-    // same promise the pinned-folder Auto-Sync disable route already makes.
     return { ok: true };
   });
 }

@@ -288,16 +288,25 @@ export class GoogleDriveBackend implements StorageBackend {
     return res.data.webViewLink ?? null;
   }
 
-  /** Creates a real, empty, user-visible folder at the top level of "My Drive" — purely for the "also
-   * create this for real in the cloud" option when pinning a new folder. AllieMinate's own file storage
-   * for that pinned folder still goes through the normal flat-prefix scheme inside the app's own hidden
-   * root, same as every other folder; this is a standalone visible marker the user can actually see and
-   * open in Drive, not a rewire of where AllieMinate's uploads land. */
-  async createVisibleFolder(name: string): Promise<void> {
-    await this.drive.files.create({
-      requestBody: { name, mimeType: 'application/vnd.google-apps.folder' },
-      fields: 'id',
-    });
+  /** Creates a real, empty, user-visible folder for the "also create this for real in the cloud" option
+   * (Sync Pairs and pinned/auto-sync folders both offer it) — at the SAME nested location
+   * (AllieMinate/Sync/<name> or AllieMinate/Universal Sync/<name>) that this pair's own files actually
+   * land at via put()/list()'s resolveFolderId, not an independent top-level marker. `relPath` is the
+   * caller's already-computed remotePrefix (e.g. "Sync/Test Sync for Google Drive"), so opening the
+   * visible folder in Drive shows exactly the files AllieMinate puts there — no separate empty folder
+   * sitting unexplained at My Drive's root next to the real one. */
+  async createVisibleFolder(relPath: string): Promise<void> {
+    await this.resolveFolderId(relPath, true);
+  }
+
+  /** Trashes (soft-delete, recoverable from Drive's own Trash — same reversibility every other delete in
+   * this app already gives the user) the visible folder createVisibleFolder made for this relPath, and
+   * everything inside it. `create: false` — never invent the folder just to immediately trash it. */
+  async deleteVisibleFolder(relPath: string): Promise<void> {
+    const fileId = await this.resolveFolderId(relPath, false);
+    if (!fileId) return;
+    await this.drive.files.update({ fileId, requestBody: { trashed: true } });
+    this.folderPathCache.delete(relPath);
   }
 
   /** The account's email — via Drive's own about.get, not the oauth2/userinfo endpoint, so it works with

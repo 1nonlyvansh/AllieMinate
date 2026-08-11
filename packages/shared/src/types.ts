@@ -171,6 +171,10 @@ export interface SyncPair {
   /** set when this pair is one leg of a Universal Sync Folder (host or an accepted spoke) — shared across
    * every device's pair for the same folder, purely for UI grouping. See UniversalSyncInvite. */
   universalSyncId?: string;
+  /** set when "also create this as a real, visible folder in the cloud" was checked at creation and the
+   * folder was actually created — gates whether the delete-confirmation dialog offers "also delete the
+   * folder from <account>" (nothing to delete there otherwise). */
+  cloudFolderCreated?: boolean;
   name: string;
   createdAt: string;
 }

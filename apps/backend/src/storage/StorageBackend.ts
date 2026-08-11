@@ -22,8 +22,15 @@ export interface StorageBackend {
    * shared with other apps/uses (Drive, OneDrive), summing our own folder wildly understates real usage. */
   getAccountUsage?(): Promise<{ usedBytes: number; totalBytes: number } | null>;
   /** Creates a real, empty, user-visible folder in the actual cloud account (not just an AllieMinate-side
-   * config) — only meaningful for providers with real folder objects (Drive). */
-  createVisibleFolder?(name: string): Promise<void>;
+   * config) — only meaningful for providers with real folder objects (Drive). `relPath` is the caller's
+   * already-computed remote prefix (e.g. "Sync/My Folder"), nested the same way AllieMinate's own
+   * uploads for that folder land, not a bare name created independently at the account's true root. */
+  createVisibleFolder?(relPath: string): Promise<void>;
+  /** Trashes the real, visible folder (and everything inside it) that createVisibleFolder created for
+   * this same relPath — the counterpart used when a user asks to delete a Sync Pair's cloud folder along
+   * with the pair itself, not just unconfigure the sync relationship. A no-op (not an error) if no such
+   * folder exists. */
+  deleteVisibleFolder?(relPath: string): Promise<void>;
   /** The account owner's email, when the provider can report it without needing a broader OAuth scope
    * than what's already granted (Drive's about.get includes it for free). */
   getAccountEmail?(): Promise<string | undefined>;
