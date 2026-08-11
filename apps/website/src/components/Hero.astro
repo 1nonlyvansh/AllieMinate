@@ -26,8 +26,8 @@ import AndroidDevice from './devices/AndroidDevice.astro';
 
     <div class="hero-visual" aria-hidden="true">
       <svg class="hero-arcs" viewBox="0 0 360 240" fill="none">
-        <path class="connection-path" style="--dash:200" d="M90 70 C 130 110, 230 110, 270 70" stroke="#00e5ff" stroke-opacity="0.5" stroke-width="2" />
-        <path class="connection-path" style="--dash:200" d="M100 140 C 140 100, 220 100, 260 140" stroke="#00e5ff" stroke-opacity="0.5" stroke-width="2" />
+        <path class="connection-path" d="M90 70 C 130 110, 230 110, 270 70" stroke="var(--accent)" stroke-opacity="0.6" stroke-width="2" stroke-linecap="round" />
+        <path class="connection-path" d="M100 140 C 140 100, 220 100, 260 140" stroke="var(--accent)" stroke-opacity="0.6" stroke-width="2" stroke-linecap="round" />
       </svg>
       <div class="hero-devices">
         <div class="hero-device hero-device-mac"><MacDevice size={130} /></div>

@@ -8,26 +8,18 @@ import Icon from './Icon.astro';
     <h2 class="section-title">Everything, verified against the codebase.</h2>
 
     <div class="feature-grid" data-reveal-group>
-      {features.map((f, i) => (
-        <div class="card feature-card reveal">
-          <button
-            class="feature-head"
-            type="button"
-            data-feature-toggle
-            aria-expanded="false"
-            aria-controls={`feature-body-${i}`}
-          >
+      {features.map((f) => (
+        <details class="card feature-card reveal">
+          <summary class="feature-head">
             <Icon name={f.icon} size={22} />
             <span class="feature-title">{f.title}</span>
             <span class="feature-chevron" aria-hidden="true">⌄</span>
-          </button>
-          <div class="feature-body" id={`feature-body-${i}`}>
-            <div class="feature-body-inner">
-              <p>{f.desc}</p>
-              <a href={f.anchor}>Learn more →</a>
-            </div>
+          </summary>
+          <div class="feature-body">
+            <p>{f.desc}</p>
+            <a href={f.anchor}>Learn more →</a>
           </div>
-        </div>
+        </details>
       ))}
     </div>
   </div>
@@ -38,7 +30,17 @@ import Icon from './Icon.astro';
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: var(--space-2);
+    /* Without this, CSS Grid's default align-items:stretch makes every card in a row match
+       the tallest one — so expanding a single card left its row siblings stretched into tall,
+       empty-looking boxes. Each card sizes to its own content now. */
+    align-items: start;
   }
+  /* <details>/<summary> — a native disclosure widget instead of a hand-rolled JS toggle +
+     CSS-grid height animation. The grid-based 0fr/1fr version had a real, hard-to-pin-down
+     bug (the row's grid item was collapsing to zero height even with an explicit pixel row
+     size forced inline with !important — something about this component's specific nesting
+     broke the standard trick). Native <details> can't have that class of bug: the browser
+     owns open/closed state, keyboard toggling, and screen-reader "expanded" announcements. */
   .feature-card {
     text-align: left;
     padding: var(--space-2) var(--space-3);
@@ -48,12 +50,12 @@ import Icon from './Icon.astro';
     align-items: center;
     gap: 10px;
     width: 100%;
-    background: none;
-    border: none;
-    padding: 0;
     color: var(--accent);
-    font: inherit;
     cursor: pointer;
+    list-style: none;
+  }
+  .feature-head::-webkit-details-marker {
+    display: none;
   }
   .feature-title {
     color: var(--text);
@@ -66,18 +68,10 @@ import Icon from './Icon.astro';
     color: var(--text-secondary);
     transition: transform 0.2s var(--ease-out);
   }
-  .feature-card.is-open .feature-chevron {
+  .feature-card[open] .feature-chevron {
     transform: rotate(180deg);
   }
   .feature-body {
-    display: grid;
-    grid-template-rows: 0fr;
-    transition: grid-template-rows 0.25s var(--ease-out);
-  }
-  .feature-card.is-open .feature-body {
-    grid-template-rows: 1fr;
-  }
-  .feature-body-inner {
     overflow: hidden;
   }
   .feature-body p {
@@ -105,14 +99,3 @@ import Icon from './Icon.astro';
     }
   }
 </style>
-
-<script>
-  document.querySelectorAll('[data-feature-toggle]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const card = btn.closest('.feature-card');
-      const expanded = btn.getAttribute('aria-expanded') === 'true';
-      btn.setAttribute('aria-expanded', String(!expanded));
-      card?.classList.toggle('is-open', !expanded);
-    });
-  });
-</script>

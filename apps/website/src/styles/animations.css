@@ -8,6 +8,13 @@
   to { stroke-dashoffset: 0; }
 }
 
+/* Continuous "data flowing" dash march along the device-connection arcs — a repeating short
+   dash/gap pattern sliding along the path, so the lines read as live/connected rather than a
+   static decoration. -32 is exactly 2x the 6+10=16 pattern length, so the loop is seamless. */
+@keyframes flow-dash {
+  to { stroke-dashoffset: -32; }
+}
+
 @keyframes pulse-dot {
   0% { opacity: 0.2; offset-distance: 0%; }
   10% { opacity: 1; }
@@ -25,8 +32,8 @@
 }
 
 .js-enabled .connection-path {
-  stroke-dasharray: var(--dash, 240);
-  animation: draw-path 2.4s var(--ease-out) forwards;
+  stroke-dasharray: 6 10;
+  animation: flow-dash 1.4s linear infinite;
 }
 
 .js-enabled .connection-dot {
