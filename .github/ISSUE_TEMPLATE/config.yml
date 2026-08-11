@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/1nonlyvansh/AllieMinate/security/policy
+    about: Please report security issues privately per SECURITY.md — do not open a public issue.
+  - name: Questions / support
+    url: mailto:vansh080605@gmail.com
+    about: General questions or help that isn't a bug or feature request.

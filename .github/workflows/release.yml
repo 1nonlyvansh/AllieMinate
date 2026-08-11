@@ -1,0 +1,59 @@
+name: Release
+
+# Runs the same checks as CI, then drafts a GitHub Release from CHANGELOG.md when a v*.*.* tag is
+# pushed. Does NOT build or attach the .dmg/.exe/.apk — those are built manually today (see
+# docs/architecture/build-and-release.md) and uploaded to the release by hand. This workflow only
+# saves the "write the release notes" step and stops a tag being pushed with broken code.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  verify:
+    name: Verify before releasing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build --workspace=@alliminate/shared
+      - run: npx tsc --noEmit -p apps/backend/tsconfig.json
+      - run: npx tsc --noEmit -p apps/desktop/tsconfig.json
+      - run: npm run build --workspace=@alliminate/backend
+      - run: npm run build --workspace=@alliminate/desktop
+      - run: npm run build:renderer --workspace=@alliminate/desktop
+
+  draft-release:
+    name: Draft GitHub Release from CHANGELOG
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract this version's CHANGELOG section
+        id: notes
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          awk -v heading="## [${TAG}]" '
+            index($0, heading) == 1 {found=1; print; next}
+            found && /^## \[/ {exit}
+            found {print}
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "No CHANGELOG.md section found for ${TAG} — add one before tagging." >&2
+            exit 1
+          fi
+      - name: Create draft release
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --draft \
+            --title "AllieMinate ${GITHUB_REF_NAME}" \
+            --notes-file release-notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}

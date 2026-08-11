@@ -1,0 +1,96 @@
+name: CI
+
+# PR -> checks -> pass/fail. Deliberately does not attempt to produce a distributable .dmg/.exe —
+# apps/desktop/build/build-app.sh assembles/signs a macOS .app using hardcoded local paths on the
+# maintainer's own machine and is not CI-portable as-is. See docs/architecture/build-and-release.md
+# for the real (manual) release process this repo currently uses.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: npm audit (informational)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      # Non-blocking on purpose — several current findings only resolve via major-version bumps
+      # (electron, fastify) that are real behavior changes, not hygiene fixes, and need a deliberate
+      # upgrade PR of their own. See SECURITY.md for the current honest list. This step exists so new
+      # vulnerabilities show up in CI logs, not to gate merges on ones already known and tracked.
+      - run: npm audit --audit-level=high
+        continue-on-error: true
+
+  typecheck:
+    name: TypeScript typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      # shared must be built first — backend/desktop resolve `@alliminate/shared` against its
+      # compiled dist/, not its TS source (see packages/shared's package.json `main`/`types`).
+      - run: npm run build --workspace=@alliminate/shared
+      - run: npx tsc --noEmit -p apps/backend/tsconfig.json
+      - run: npx tsc --noEmit -p apps/desktop/tsconfig.json
+
+  backend-tests:
+    name: Backend unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build --workspace=@alliminate/shared
+      - run: npm test --workspace=@alliminate/backend
+
+  desktop-renderer-build:
+    name: Desktop renderer build smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build --workspace=@alliminate/shared
+      - run: npm run build --workspace=@alliminate/backend
+      - run: npm run build --workspace=@alliminate/desktop
+      - run: npm run build:renderer --workspace=@alliminate/desktop
+
+  android-build:
+    name: Android debug build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compile Kotlin
+        working-directory: apps/android
+        run: ./gradlew compileDebugKotlin --no-daemon
+      - name: Unit tests
+        working-directory: apps/android
+        run: ./gradlew testDebugUnitTest --no-daemon

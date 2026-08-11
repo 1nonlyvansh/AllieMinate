@@ -317,6 +317,7 @@ ipcMain.handle('file:showInFinder', (_e, filePath: string) => {
 // the wrong one for "show me what's in this synced folder").
 ipcMain.handle('file:openFolder', (_e, folderPath: string) => shell.openPath(folderPath));
 ipcMain.handle('shell:openExternal', (_e, url: string) => shell.openExternal(url));
+ipcMain.handle('app:getVersion', () => app.getVersion());
 
 ipcMain.handle('mail:composeWithAttachments', (_e, params: { to: string; subject: string; body: string; attachmentPaths: string[] }) =>
   composeMailWithAttachments(params),

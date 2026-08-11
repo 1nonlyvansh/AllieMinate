@@ -11,31 +11,178 @@
 
 **One workspace for every cloud you own, and every device you carry.**
 
-*Google Drive, OneDrive, Backblaze B2, IDrive e2, MEGA, and pCloud — unified on your Mac and Windows PC, paired with your phone, with nothing routed through anyone's server but the providers themselves.*
+*Google Drive, OneDrive, Backblaze B2, IDrive e2, MEGA, and pCloud — unified on your Mac, Windows PC, and Android phone, with nothing routed through anyone's server but the providers themselves.*
 
 ---
 
-[![Version](https://img.shields.io/badge/Version-v2.8.8-00e5ff?style=flat-square&labelColor=050d1a)](.)
-[![TypeScript](https://img.shields.io/badge/TypeScript-Backend%20%26%20UI-00e5ff?style=flat-square&logo=typescript&logoColor=00e5ff&labelColor=050d1a)](https://www.typescriptlang.org)
-[![Kotlin](https://img.shields.io/badge/Kotlin-Android-00e5ff?style=flat-square&logo=kotlin&logoColor=00e5ff&labelColor=050d1a)](https://kotlinlang.org)
-[![Electron](https://img.shields.io/badge/Electron-Desktop-00e5ff?style=flat-square&logo=electron&logoColor=00e5ff&labelColor=050d1a)](https://electronjs.org)
-[![React](https://img.shields.io/badge/React-18-00e5ff?style=flat-square&logo=react&logoColor=00e5ff&labelColor=050d1a)](https://react.dev)
-[![Fastify](https://img.shields.io/badge/Fastify-Backend-00e5ff?style=flat-square&logo=fastify&logoColor=00e5ff&labelColor=050d1a)](https://fastify.dev)
-[![Android](https://img.shields.io/badge/Android-Companion%20App-00e5ff?style=flat-square&logo=android&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/releases/latest)
-[![macOS DMG](https://img.shields.io/badge/macOS-DMG%20Installer-00e5ff?style=flat-square&logo=apple&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/releases/latest)
-[![Windows](https://img.shields.io/badge/Windows-In%20Progress-0d2a3a?style=flat-square&logo=windows&logoColor=c8e8f0&labelColor=050d1a)](.)
-[![Platform](https://img.shields.io/badge/Platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Android-0d2a3a?style=flat-square&labelColor=050d1a)](.)
-[![Status](https://img.shields.io/badge/Status-Active%20Dev-1db954?style=flat-square&labelColor=050d1a)](.)
+[![Version](https://img.shields.io/badge/Version-v2.8.8-00e5ff?style=flat-square&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/releases/tag/v2.8.8)
+[![License: MIT](https://img.shields.io/badge/License-MIT-00e5ff?style=flat-square&labelColor=050d1a)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Android-0d2a3a?style=flat-square&labelColor=050d1a)](#supported-platforms)
+[![CI](https://img.shields.io/github/actions/workflow/status/1nonlyvansh/AllieMinate/ci.yml?branch=main&style=flat-square&label=CI&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/actions/workflows/ci.yml)
+[![Status](https://img.shields.io/badge/Status-Active%20Dev-1db954?style=flat-square&labelColor=050d1a)](CHANGELOG.md)
+
+[Website](https://allieminate.vercel.app/) · [Download](https://github.com/1nonlyvansh/AllieMinate/releases/latest) · [Changelog](CHANGELOG.md) · [Docs](docs/) · [Report a Bug](https://github.com/1nonlyvansh/AllieMinate/issues/new?template=bug_report.md)
 
 </div>
 
 ---
 
+## Contents
+
+1. [What is AllieMinate?](#what-is-allieminate)
+2. [Screenshots](#screenshots)
+3. [Supported platforms](#supported-platforms)
+4. [Download](#download)
+5. [Installation](#installation)
+6. [First launch](#first-launch)
+7. [Cloud provider support](#cloud-provider-support)
+8. [Device pairing](#device-pairing)
+9. [Sync](#sync)
+10. [Nearby Share](#nearby-share)
+11. [Universal Clipboard](#universal-clipboard)
+12. [Feature Matrix](#feature-matrix)
+13. [Compatibility Matrix](#compatibility-matrix)
+14. [Security & privacy model](#security--privacy-model)
+15. [Architecture](#architecture)
+16. [System requirements](#system-requirements)
+17. [Known Issues](#known-issues)
+18. [Troubleshooting](#troubleshooting)
+19. [Developer Setup](#developer-setup)
+20. [Testing](#testing)
+21. [Contributing](#contributing)
+22. [Roadmap](#roadmap)
+23. [License](#license)
+24. [Changelog / releases](#changelog--releases)
+25. [Support / contact](#support--contact)
+
+---
+
 ## What is AllieMinate?
 
-AllieMinate ties **Google Drive, OneDrive, Backblaze B2, IDrive e2, MEGA, and pCloud** into a single unified workspace on your Mac and Windows PC — as many accounts per provider as you want, browsed, searched, and managed like one drive instead of six separate apps fighting for your taskbar.
+AllieMinate ties **Google Drive, OneDrive, Backblaze B2, IDrive e2, MEGA, and pCloud** into a single unified workspace on your Mac and Windows PC — as many accounts per provider as you want, browsed, searched, and managed like one drive instead of six separate apps.
 
-It then pairs with your **Android phone**, and with other **Mac/Windows machines**, directly over your local network — no cloud relay, no AllieMinate-operated server in the middle. Once paired, files, clipboard text, and live status flow directly between your devices: your phone's photos show up on your desktop, your desktop's clouds show up on your phone, folders stay in sync across every device you grant them to, and copying on one machine lets you paste on another.
+It then pairs with your **Android phone**, and with other **Mac/Windows machines**, directly over your local network — no cloud relay, no AllieMinate-operated server in the middle. Once paired, files, clipboard text, and live status flow directly between your devices: your phone's photos show up on your desktop, your desktop's clouds show up on your phone, folders stay in sync across every device you grant them to, and copying on one desktop lets you paste on another (or on your phone).
+
+**Value proposition, plainly:** most cloud managers stop at "browse your cloud." AllieMinate also does device-to-device sync, LAN file transfer, clipboard sharing, and remote unlock — one app instead of four — with no subscription, no mandatory account, and (for every device-to-device feature) no server operated by this project standing between your devices.
+
+---
+
+## Screenshots
+
+**None are currently checked into this repository.** Rather than fabricate mockups, here's exactly
+what's missing and should be added under a future `docs/assets/screenshots/` (referenced from here
+and from `apps/website`):
+
+- [ ] Desktop — Files view (combined cloud view, multiple accounts)
+- [ ] Desktop — Sync view (a Sync Pair card with live progress)
+- [ ] Desktop — Devices view (a paired phone + another paired desktop)
+- [ ] Desktop — the tray/menu bar quick-access panel
+- [ ] Desktop — About AllieMinate page
+- [ ] Android — Overview screen
+- [ ] Android — Sync screen with a Universal Sync folder
+- [ ] Android — a paired-device detail screen
+
+If you're the maintainer picking this up: run the app, take these on a clean/representative account
+(no personal file names visible), save as PNG under `docs/assets/screenshots/`, then replace this
+section with actual `![...]()` image embeds.
+
+---
+
+## Supported platforms
+
+| Platform | Status |
+|---|---|
+| macOS (Apple Silicon & Intel) | Shipped — `.dmg` installer |
+| Windows 10/11 (64-bit) | Shipped — `.exe` installer |
+| Android 8.0+ (API 26+) | Shipped — `.apk`, sideloaded (not on Play Store) |
+
+None of the three installers are code-signed with a paid certificate yet — see
+[First launch](#first-launch) for the one-time warning each platform shows and how to get past it, and
+[Known Issues](#known-issues) for what that means in practice.
+
+---
+
+## Download
+
+[![Download DMG](https://img.shields.io/badge/macOS-Download%20.dmg-00e5ff?style=for-the-badge&logo=apple&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/releases/latest)
+[![Download EXE](https://img.shields.io/badge/Windows-Download%20.exe-00e5ff?style=for-the-badge&logo=windows&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/releases/latest)
+[![Download APK](https://img.shields.io/badge/Android-Download%20.apk-00e5ff?style=for-the-badge&logo=android&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/releases/latest)
+
+All installers are published on [GitHub Releases](https://github.com/1nonlyvansh/AllieMinate/releases) — the current version is **v2.8.8**. Verify your download's integrity against the SHA-256 checksum published with each release (see [docs/architecture/build-and-release.md](docs/architecture/build-and-release.md#generating-checksums)).
+
+---
+
+## Installation
+
+Full per-platform walkthroughs, including the Gatekeeper/SmartScreen warning each one shows on first
+run and how to uninstall/reset cleanly:
+
+- **[macOS installation](docs/installation/macos.md)**
+- **[Windows installation](docs/installation/windows.md)**
+- **[Android installation](docs/installation/android.md)**
+
+---
+
+## First launch
+
+1. Install per the guide above.
+2. Get past the one-time unsigned-app warning (Gatekeeper on macOS, SmartScreen on Windows, "install
+   unknown apps" on Android) — this is expected on every platform right now, not a sign of a bad
+   download. See [Known Issues](#known-issues) for why.
+3. Connect at least one cloud provider — see [Cloud provider support](#cloud-provider-support).
+4. Optionally pair a phone or another desktop — see [Device pairing](#device-pairing).
+
+---
+
+## Cloud provider support
+
+| Provider | Multi-account | Auth method |
+|---|---|---|
+| Google Drive | Yes | OAuth |
+| OneDrive | Yes | OAuth |
+| Backblaze B2 | Yes | API key pair |
+| IDrive e2 | Yes | API key pair (S3-compatible) |
+| pCloud | Yes | OAuth |
+| MEGA | Yes | Account email/password |
+
+Full connect-flow walkthrough: **[docs/getting-started/cloud-accounts.md](docs/getting-started/cloud-accounts.md)**.
+
+---
+
+## Device pairing
+
+Pair a phone to a desktop, or two desktops to each other, over LAN (Wi-Fi QR code or USB) — no cloud
+relay, no account. A phone can hold up to 5 simultaneous desktop pairings.
+
+Full walkthrough: **[docs/getting-started/device-pairing.md](docs/getting-started/device-pairing.md)**.
+
+---
+
+## Sync
+
+Sync Pairs keep a local folder in sync against a cloud account or a paired device — two-way,
+backup-only, or download-only, with real conflict handling (newer file wins, older side preserved as
+a conflict copy) and a Universal Sync mode that broadcasts one folder to every granted device at once.
+
+Full walkthrough incl. conflict resolution and ignore rules: **[docs/getting-started/sync-configuration.md](docs/getting-started/sync-configuration.md)**.
+
+---
+
+## Nearby Share
+
+Drop a file on any AllieMinate device visible on the same network — paired *or not* — with a real
+accept/decline prompt on the receiving end. Separate from a Sync Pair: a one-off transfer, not an
+ongoing sync relationship. Details: **[docs/features/overview.md#nearby-share](docs/features/overview.md#nearby-share)**.
+
+---
+
+## Universal Clipboard
+
+Copy on a paired Mac or Windows machine, paste on another paired desktop or an Android phone,
+automatically. **One direction only** — phone → desktop is not supported, and can't be reliably
+worked around: Android blocks background apps from reading the system clipboard, a platform
+restriction Microsoft's own first-party Phone Link clipboard feature hits too. Details:
+**[docs/features/overview.md#universal-clipboard](docs/features/overview.md#universal-clipboard)**.
 
 ---
 
@@ -55,109 +202,94 @@ It then pairs with your **Android phone**, and with other **Mac/Windows machines
 - Preview images and video inline (zoom, rotate, custom video controls) before ever downloading
 
 **🔄 Sync Engine**
-- Sync Pairs — two-way, backup-only, or download-only sync between any local folder and a cloud account **or a paired device**, with a real folder-tree destination picker (browse and create new folders on the remote side, not just a flat dropdown)
+- Sync Pairs — two-way, backup-only, or download-only sync between any local folder and a cloud account **or a paired device**, with a real folder-tree destination picker
 - Real conflict detection and resolution, with a dedicated Sync Trash (soft-delete both directions)
-- User-editable ignore-pattern rules, bandwidth throttling, storage quota warnings
+- User-editable ignore-pattern rules, real bandwidth throttling, storage quota warnings
 - Live per-pair progress and file counts, pause/resume independent of disabling a pair
-- Deleting a Sync Pair requires an explicit confirmation **and** a device-authentication step (Touch ID/PIN on desktop, fingerprint/face/PIN on Android) — not a single accidental click away
-- **Universal Sync Folder** — one cloud login, one host folder, broadcast to every device you grant it to at once (Mac, Windows, and Android simultaneously) instead of wiring up a separate pair per device
+- Deleting a Sync Pair requires an explicit confirmation **and** a device-authentication step
+- **Universal Sync Folder** — one cloud login, one host folder, broadcast to every device you grant it to at once
 
 **📱 Cross-Device**
-- Pair your phone over Wi-Fi (QR code) or USB, and pair Mac/Windows machines with each other — straight LAN connection, no cloud relay
+- Pair your phone over Wi-Fi (QR code) or USB, and pair Mac/Windows machines with each other
 - Up to 5 paired "master" devices per phone at once
-- Browse a paired device's own files by category, with a full remote-browser (Add/Delete/Move/Share) for anything living in a Master's own Sync Pair
-- Nearby Share — drop a file on any paired (or unpaired, nearby) device without touching a cloud account
-- **Universal Clipboard** — copy text on one desktop, paste on another, or on a paired phone, automatically
+- Full remote-browser (Add/Delete/Move/Share) for anything living in a Master's own Sync Pair
+- Nearby Share — drop a file on any paired (or unpaired, nearby) device
+- Universal Clipboard — desktop → phone/desktop (see above)
 - Continuity — open a file on your phone, pick it back up on your Mac/PC
 - Remote unlock — approve unlocking your Mac/PC from a paired phone
-- Live "device connected/disconnected" OS notifications, with custom alert sounds (toggle to silence)
-- Self-healing pairing — devices rediscover each other automatically across network changes, including a phone's own hotspot
+- Live device connect/disconnect OS notifications, with custom alert sounds
+- Self-healing pairing across network changes, including a phone's own hotspot
 
 </td>
 <td width="50%" valign="top">
 
 **🔒 Security**
-- App Lock (Touch ID on Mac, fingerprint/face/PIN on Android) on every platform
+- App Lock (Touch ID on Mac, fingerprint/face/PIN on Android, app PIN everywhere) on every platform
 - Destructive actions (like deleting a Sync Pair) gated behind device authentication independent of App Lock being on
 - OAuth tokens and API keys never committed — `.env`-only, fully gitignored
-- Every paired-device request signed and token-authenticated
+- Every paired-device request token-authenticated
 
 **🖥️ Desktop Experience**
-- **Menu Bar / Tray Icon** — lives in your system tray the whole time AllieMinate is running, no need to keep the full window open:
-  - Click it for a floating panel of your most recent cloud and device files, thumbnails included, with the SAME inline preview the main window uses
-  - Pick which cloud account (or "Combined") the panel shows, right from a dropdown in the panel itself
-  - Drag a file straight out of the panel into Finder/Explorer, Mail, Slack, anywhere — like dragging from a real folder
-  - Drop a file onto the tray icon to send it straight to a paired device or a cloud folder
-  - A live progress bar for anything currently uploading or downloading
-- Finder-style multi-select everywhere: click, ⌘/Ctrl-click, Shift-range, and marquee drag-select, feeding a shared bulk-action bar (download/copy/cut/move-to-another-cloud/pin/delete)
+- **Menu Bar / Tray Icon** — recent cloud and device files, thumbnails, inline preview, drag-out to Finder/Explorer, drop-to-send, live transfer progress
+- Finder-style multi-select everywhere: click, ⌘/Ctrl-click, Shift-range, and marquee drag-select feeding a shared bulk-action bar
 - Global search across every cloud and every paired device at once
-- Full-featured Trash, Transfer History (both directions — sent to a device, or pulled from one), and per-account storage breakdown
-- **About AllieMinate** page — features, use cases, and direct links to the project's GitHub, developer profiles, and support contact, right inside the app
+- Full-featured Trash, two-directional Transfer History, per-account storage breakdown
+- **About AllieMinate** page — features, use cases, GitHub/developer/support links, right inside the app
 
 **📷 Google Photos**
 - Browse and pick from your linked Google Photos library alongside your Drive files
 
 **⚡ Performance & Reliability**
 - Every provider fetch runs in parallel — one slow account never blocks the others
-- Bounded-concurrency batch operations — bulk delete/move/copy don't hammer any single provider
-- Streaming uploads for large files — never fully buffered in memory
+- Bounded-concurrency batch operations; streaming uploads for large files
 - Auto-restart on backend crash, with automated crash logging
-- Global unhandled-rejection safety net — one bad promise doesn't take down the whole app
+- Global unhandled-rejection safety net
 - Trash entries survive a failed cloud delete instead of silently vanishing
 
 </td>
 </tr>
 </table>
 
----
+### Android Companion App
 
-## Android Companion App
-
-<table>
-<tr>
-<td width="50%" valign="top">
-
-**Features**
-- Full cloud browsing — every account a paired Mac/PC has connected, right on your phone
+- Full cloud browsing — every account a paired Mac/PC has connected
 - Camera/folder backup to any cloud account, with live progress notifications
-- Sync Pairs — background push from a phone folder to a cloud destination, plus full two-way pull for Universal Sync folders
+- Sync Pairs — background push, plus full two-way pull for Universal Sync folders
 - Full remote browser (Add/Delete/Move/Share) for a paired Master's own Sync Pair folders
-- Nearby Share — send/receive files with any paired or nearby AllieMinate device
-- Explore & Send Files to a paired Master, with tap-to-preview before transferring
-- Cross-device search
-- App Lock (biometric) + device-auth confirmation on destructive actions
-- Pair via QR code or USB — no manual IP entry, up to 5 masters at once
-- **About AllieMinate** screen (Settings → About AllieMinate) with the same feature/developer/support info as desktop
-
-</td>
-<td width="50%" valign="top">
-
-**Requirements**
-- Android 8.0 (API 26)+
-- Same Wi-Fi network as your Mac/PC (or your desktop tethered to your phone's hotspot)
-- AllieMinate running on the desktop you're pairing with
-
-**Download**
-
-[![Download APK](https://img.shields.io/badge/Download-AllieMinate.apk-00e5ff?style=for-the-badge&logo=android&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/releases/latest)
-
-> Enable *Install from unknown sources* in Android Settings → Security before installing.
-
-</td>
-</tr>
-</table>
-
-### Pairing
-
-1. On desktop: **Devices → Pair an Android** (or **Pair a Device** for another Mac/PC) — shows a QR code (or offers USB).
-2. On phone: **Devices → Pair a Device** — scan the QR code, or connect via USB.
-3. Done. Your phone appears on the desktop's Devices page, and the desktop's clouds appear in the phone's Cloud Services tab.
+- Nearby Share, cross-device search, App Lock (biometric) + device-auth on destructive actions
+- Pair via QR code or USB, up to 5 masters at once
+- **About AllieMinate** screen (Settings → About AllieMinate)
 
 ---
 
-## Windows
+## Compatibility Matrix
 
-The backend, shared types, and almost all of the renderer UI are already platform-agnostic — a Windows build runs the same feature set as macOS today (device pairing, Universal Sync, Universal Clipboard, battery reporting, notifications, the full click/preview/multi-select model, and more), currently via a manual dev-mode launch. A proper `.exe` installer (NSIS via electron-builder, matching the `.dmg`'s drag-and-drop simplicity) is in progress — see the Roadmap below.
+Only marked ✅ where actually implemented and verified; ⚠️ marks a real but partial/limited implementation, not a missing feature.
+
+| Feature | macOS | Windows | Android |
+|---|:---:|:---:|:---:|
+| Cloud aggregation | ✅ | ✅ | ✅ (browses a paired desktop's accounts) |
+| Sync Pairs / Universal Sync | ✅ | ✅ | ✅ |
+| Nearby Share | ✅ | ✅ | ✅ |
+| Universal Clipboard | ✅ (send + receive) | ✅ (send + receive) | ⚠️ receive-only — can't send to desktop ([why](#universal-clipboard)) |
+| Device pairing | ✅ | ✅ | ✅ |
+| Biometric / destructive-action auth | ✅ Touch ID + app PIN | ⚠️ app PIN only — no Windows Hello yet | ✅ biometric + device credential |
+| Connect/disconnect notifications | ✅ | ✅ | ✅ |
+| macOS Share Extension | ⚠️ built, Gatekeeper-blocked ([why](#known-issues)) | ❌ not applicable | ❌ not applicable |
+
+---
+
+## Security & privacy model
+
+- **No AllieMinate-operated server, anywhere.** Cloud calls go straight from your machine to each
+  provider's own API; device-to-device traffic (pairing, sync, transfer, clipboard, Nearby Share)
+  stays on your LAN.
+- Pairing uses per-device tokens, not encryption of the LAN traffic itself — see the honest threat
+  model in **[docs/architecture/security-model.md](docs/architecture/security-model.md)**.
+- `.env` (OAuth secrets, API keys) is gitignored and never intended to be committed — see
+  **[SECURITY.md](SECURITY.md)** for the full policy and how to report a vulnerability.
+- App Lock and destructive-action authentication are described in the [Feature Matrix](#feature-matrix)
+  above; what they do and don't protect against is in the security model doc linked above.
 
 ---
 
@@ -168,34 +300,79 @@ apps/
   backend/    Fastify server — the real brain. Talks to every cloud provider and every
               paired device, handles sync, trash, search, pairing. Runs locally, never
               leaves your machine.
-  desktop/    Electron + React. The macOS (Windows in progress) app — a UI shell around
-              the backend, plus native bits: tray, USB pairing, lock screen.
-  android/    Kotlin + Jetpack Compose. The phone app — its own local HTTP server so the
-              Mac can browse it, plus background workers for sync and camera backup.
+  desktop/    Electron + React. The macOS/Windows app — a UI shell around the backend,
+              plus native bits: tray, USB pairing, lock screen, Share Extension (macOS).
+  android/    Kotlin + Jetpack Compose. The phone app — its own local HTTP server so a
+              paired desktop can browse it, plus background workers for sync/backup.
+  website/    Static marketing site — no build step, no backend.
 packages/
   shared/     TypeScript types shared between backend and desktop.
 ```
 
-The backend is the single source of truth. The desktop app is a window onto it; the phone talks to it directly over the LAN once paired. Nothing about your files or accounts passes through any AllieMinate-operated server, because there isn't one.
+The backend is the single source of truth on a desktop install; the desktop app is a window onto it;
+a paired phone talks to it directly over the LAN. Full breakdown, a Mermaid diagram, and the
+add-a-file data-flow walkthrough: **[docs/architecture/overview.md](docs/architecture/overview.md)**.
 
 ---
 
-## Running the Mac App
+## System requirements
 
-The fastest way to get AllieMinate on your Mac is the `.dmg` installer — no Node, no build step, just drag it into Applications like any other Mac app:
+Practical minimums for an Electron + Node desktop app and a modern Compose Android app — not
+lab-benchmarked, but defensible for the workload (a local Fastify server plus a Chromium-based UI):
 
-[![Download DMG](https://img.shields.io/badge/Download-AllieMinate.dmg-00e5ff?style=for-the-badge&logo=apple&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/releases/latest)
+| | Minimum |
+|---|---|
+| **macOS** | Apple Silicon or Intel Mac, macOS 12+, 4GB RAM, ~200MB free disk |
+| **Windows** | Windows 10/11 64-bit, 4GB RAM, ~200MB free disk |
+| **Android** | Android 8.0 (API 26)+, any device that can run a modern Compose app |
 
-1. Download and open the `.dmg`.
-2. Drag **AllieMinate** onto the **Applications** shortcut next to it.
-3. Open AllieMinate from Applications or Launchpad. Since it isn't notarized with a paid Apple Developer certificate, the first launch will be blocked by Gatekeeper — right-click the app → **Open** (or **System Settings → Privacy & Security → Open Anyway**) to get past that one-time warning.
-4. Add your cloud accounts from **Settings**.
+---
 
-Prefer building from source instead (e.g. to make changes)? Keep reading below.
+## Known Issues
+
+Real, currently-shipping limitations — not hidden, not silently worked around:
+
+- **Universal Clipboard is phone → desktop only in the other direction — not supported at all.**
+  Android platform restriction, not a bug to file. See [Universal Clipboard](#universal-clipboard).
+- **macOS Share Extension is built but not enabled.** Ad-hoc-signed Share Extensions are rejected by
+  Gatekeeper with no user override; needs a paid Apple Developer ID. Use Nearby Share or a Sync Pair
+  instead for now.
+- **No Windows Hello yet.** Destructive-action authentication (e.g. deleting a Sync Pair) on Windows
+  currently falls back to the app's own PIN rather than a native biometric prompt.
+- **Two Settings → Sync Preferences controls are not wired to real logic**: the "Conflict resolution"
+  dropdown (actual behavior is always newest-wins with a conflict copy, regardless of the selection)
+  and "Pause sync on metered connection" toggle (no effect). Bandwidth throttling, the third control
+  in that section, *is* real.
+- **LAN traffic between paired devices is not TLS-encrypted.** Token-authenticated, but plaintext
+  transport — fine on a trusted home/office network, not something to rely on over hostile Wi-Fi. See
+  [docs/architecture/security-model.md](docs/architecture/security-model.md).
+- **None of the three installers are code-signed with a paid certificate.** Expect a one-time
+  Gatekeeper/SmartScreen/unknown-sources warning on first install — see [Installation](#installation).
+- **The released Android `.apk` is a debug build**, signed with the default Android debug keystore —
+  there is no release signing key configured yet.
+- **No Android tests exist yet** (JVM unit or instrumented) — CI runs `testDebugUnitTest` but it's
+  currently a no-op with zero test sources. Only the backend has real automated test coverage today
+  (pure sync/pairing logic — see [Testing](#testing)). Android test coverage is a real gap, not
+  hidden by the CI green checkmark.
+- **8 known dependency vulnerabilities** (Electron, Fastify, and a `googleapis`-chain `uuid` advisory)
+  require major-version bumps to fully resolve — tracked, not silently ignored. See
+  [SECURITY.md](SECURITY.md#known-dependency-vulnerabilities-as-of-v288).
+
+---
+
+## Troubleshooting
+
+Common problems and fixes, including the items above in more depth:
+**[docs/troubleshooting/common-issues.md](docs/troubleshooting/common-issues.md)**.
+
+---
+
+## Developer Setup
 
 ### Requirements
-- macOS
 - [Node.js](https://nodejs.org) 20+
+- Android Studio (Iguana or newer), for the Android app
+- macOS, to build the `.dmg` (the build script currently only runs there)
 
 ### 1 — Clone & install
 ```bash
@@ -208,7 +385,9 @@ npm install
 ```bash
 cp .env.example .env
 ```
-Fill in whichever providers you want — the app only shows providers it finds valid config for.
+Fill in whichever providers you want — the app only shows providers it finds valid config for. See
+**[docs/getting-started/cloud-accounts.md](docs/getting-started/cloud-accounts.md)** for where each
+value comes from.
 
 | Provider | Required env vars |
 |---|---|
@@ -219,62 +398,90 @@ Fill in whichever providers you want — the app only shows providers it finds v
 | pCloud | `PCLOUD_CLIENT_ID`, `PCLOUD_CLIENT_SECRET`, `PCLOUD_ACCESS_TOKEN` |
 | MEGA | `MEGA_EMAIL`, `MEGA_PASSWORD` |
 
-> Google Drive and OneDrive need an OAuth app registered in their own developer consoles to get a client ID/secret. B2, IDrive e2, and pCloud use plain API keys from their dashboards. MEGA just uses your account login.
-
-### 3 — Build & run
+### 3 — Build & run (macOS)
 ```bash
 bash apps/desktop/build/build-app.sh
 open ~/Applications/AllieMinate.app
 ```
-Compiles the backend, desktop main process, and both renderer bundles, then assembles and installs a full `.app` to `~/Applications`. Re-run after any change — it preserves your connected accounts, pairings, and pinned folders across rebuilds.
+Compiles the backend, desktop main process, and both renderer bundles, then assembles and installs a
+full `.app` to `~/Applications`. Re-run after any change — it preserves your connected accounts,
+pairings, and pinned folders across rebuilds. This script has hardcoded local paths and is not
+CI-portable as-is — see [docs/architecture/build-and-release.md](docs/architecture/build-and-release.md).
 
----
+### Build & run (Windows)
+Same source tree, no Windows-specific code changes needed to build — package with
+electron-builder/NSIS on a Windows machine. There is no committed Windows build script yet; see
+[docs/architecture/build-and-release.md](docs/architecture/build-and-release.md) for the current
+manual process.
 
-## Running the Android App
-
-### Requirements
-- Android Studio (Iguana or newer)
-- A phone or emulator on Android 8.0 (API 26)+
-
-### 1 — Open & build
+### Run the Android app
 Open `apps/android` in Android Studio, let Gradle sync, then Run on a connected device or emulator.
-
-### 2 — Pair
-See [Pairing](#pairing) above.
+Then see [Device pairing](#device-pairing).
 
 ---
 
-## Tech Stack
+## Testing
 
-| Layer | Technology |
-|---|---|
-| Backend | Node.js · TypeScript · Fastify |
-| Desktop | Electron · React 18 · TypeScript |
-| Android | Kotlin · Jetpack Compose · WorkManager |
-| Shared types | TypeScript (`packages/shared`) |
-| Cloud SDKs | Google APIs (Drive), Microsoft Graph (OneDrive), AWS SDK v3 (S3-compatible: B2, IDrive e2), MEGA SDK, pCloud REST API |
-| Device pairing | LAN HTTP + token auth, UDP broadcast discovery (self-healing reconnect) |
+```bash
+# Backend unit tests (Vitest) — pure-logic modules: pairing/token lifecycle, ignore-rule matching,
+# content hashing, remote-prefix collision handling.
+npm test --workspace=@alliminate/backend
+
+# TypeScript typecheck (backend + desktop)
+npm run build --workspace=@alliminate/shared
+npx tsc --noEmit -p apps/backend/tsconfig.json
+npx tsc --noEmit -p apps/desktop/tsconfig.json
+
+# Android — compile + JVM unit tests
+cd apps/android && ./gradlew compileDebugKotlin testDebugUnitTest
+```
+
+All of the above run in CI on every PR — see [.github/workflows/ci.yml](.github/workflows/ci.yml).
+Test coverage is real but intentionally scoped to pure logic that doesn't need heavy mocking right
+now (see [Known Issues](#known-issues) for what's not covered yet — HTTP route handlers, the full
+two-way sync reconciliation engine, and any UI/instrumented Android tests). Expanding it is a welcome
+contribution — see [CONTRIBUTING.md](CONTRIBUTING.md#tests).
 
 ---
 
-## A Few Things Worth Knowing
+## Contributing
 
-- **Nothing about your files touches an AllieMinate server** — there isn't one. Cloud calls go straight to each provider's own API; device-to-device traffic stays on your LAN.
-- **`.env` is gitignored on purpose.** Never commit real credentials — see `.env.example` for the shape without the values.
-- **Universal Clipboard is one-way (desktop → phone) by design, not a bug.** Android blocks background apps from reading the system clipboard unless they're the focused foreground app or the default keyboard — a platform restriction, not something AllieMinate can work around (even Microsoft's own first-party Phone Link clipboard feature is the same direction only). Desktop → phone clipboard sync works automatically; phone → desktop does not.
-- **macOS Share Extension ("Share to Connected Devices") is built but not yet enabled.** The extension compiles and installs correctly, but macOS Gatekeeper refuses to register any Share Extension that isn't signed with a paid Apple Developer ID — there's no user-facing override the way there is for a regular app launch. It'll light up once the project has a real Developer ID; until then, use Nearby Share or a Sync Pair instead.
-- Windows is actively in progress — the backend and shared types are already fully platform-agnostic and running there today (pairing, Universal Sync, Universal Clipboard, notifications, and more all verified working); what's left is packaging a proper `.exe` installer.
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for dev setup, coding conventions, and the PR process.
+Please also read the **[Code of Conduct](CODE_OF_CONDUCT.md)**.
 
 ---
 
 ## Roadmap
 
-- [ ] Windows `.exe` installer (NSIS / electron-builder)
-- [ ] macOS Share Extension enabled (needs a paid Apple Developer ID)
-- [ ] Windows Hello for destructive-action confirmation (Mac already has Touch ID; Windows currently falls back to app PIN)
+- [ ] Code-sign all three installers (Apple Developer ID, Windows code-signing cert, Android release key)
+- [ ] macOS Share Extension enabled (blocked on the item above)
+- [ ] Windows Hello for destructive-action confirmation
+- [ ] Wire up (or remove) the non-functional Conflict Resolution / metered-connection Settings controls
+- [ ] TLS for LAN device-to-device traffic
 - [ ] File versioning / point-in-time restore
 - [ ] Public share links with expiry
 - [ ] Selective sync UI polish
+- [ ] UI/instrumented test coverage (desktop + Android)
+
+---
+
+## License
+
+[MIT](LICENSE) © 2026 Vansh Kishore Sharma.
+
+---
+
+## Changelog / releases
+
+Full version history: **[CHANGELOG.md](CHANGELOG.md)**. Installers: **[GitHub Releases](https://github.com/1nonlyvansh/AllieMinate/releases)**.
+
+---
+
+## Support / contact
+
+**Vansh Kishore Sharma** — [GitHub](https://github.com/1nonlyvansh) · [Instagram](https://instagram.com/1nonlyvansh) · [LinkedIn](https://www.linkedin.com/in/vanshkishore/)
+
+Bug or feature request → [open an issue](https://github.com/1nonlyvansh/AllieMinate/issues/new/choose). Security issue → [SECURITY.md](SECURITY.md) (do not open a public issue). Anything else → [vansh080605@gmail.com](mailto:vansh080605@gmail.com) · [WhatsApp +91 91361 58580](https://wa.me/919136158580).
 
 ---
 
@@ -283,19 +490,5 @@ See [Pairing](#pairing) above.
 **AllieMinate v2.8.8** — cross-platform cloud aggregation · self-healing device pairing · zero-relay sync
 
 *A space with you.*
-
-<br>
-
-[![GitHub](https://img.shields.io/badge/GitHub-1nonlyvansh%2FAllieMinate-00e5ff?style=flat-square&logo=github&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate)
-&nbsp;
-[![Developer](https://img.shields.io/badge/GitHub-1nonlyvansh-00e5ff?style=flat-square&logo=github&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh)
-&nbsp;
-[![Instagram](https://img.shields.io/badge/Instagram-%401nonlyvansh-00e5ff?style=flat-square&logo=instagram&logoColor=00e5ff&labelColor=050d1a)](https://instagram.com/1nonlyvansh)
-&nbsp;
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-vanshkishore-00e5ff?style=flat-square&logo=linkedin&logoColor=00e5ff&labelColor=050d1a)](https://www.linkedin.com/in/vanshkishore/)
-
-<br>
-
-Need help or have a suggestion? [vansh080605@gmail.com](mailto:vansh080605@gmail.com) · [WhatsApp +91 91361 58580](https://wa.me/919136158580)
 
 </div>

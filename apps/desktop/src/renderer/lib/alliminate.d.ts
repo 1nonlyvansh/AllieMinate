@@ -26,6 +26,7 @@ declare global {
       onTrayState: (cb: (state: unknown) => void) => () => void;
       readClipboardText: () => Promise<string>;
       writeClipboardText: (text: string) => Promise<void>;
+      getVersion: () => Promise<string>;
     };
   }
 }

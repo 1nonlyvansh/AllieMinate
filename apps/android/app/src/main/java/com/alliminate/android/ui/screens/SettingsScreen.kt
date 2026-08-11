@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.alliminate.android.BuildConfig
 import com.alliminate.android.data.AccountInfo
 import com.alliminate.android.data.ApiResult
 import com.alliminate.android.data.Prefs
@@ -95,7 +96,7 @@ fun SettingsScreen(onOpenDrawer: () -> Unit, onOpenAbout: () -> Unit) {
         }
 
         SettingsSection("About") {
-            SettingsRow(icon = Icons.Filled.Info, title = "Version", subtitle = "AllieMinate for Android 0.1.0 (foundation build)")
+            SettingsRow(icon = Icons.Filled.Info, title = "Version", subtitle = "AllieMinate for Android ${BuildConfig.VERSION_NAME}")
             SettingsRow(
                 icon = Icons.Filled.Info,
                 title = "About AllieMinate",

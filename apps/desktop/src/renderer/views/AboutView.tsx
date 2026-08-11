@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { IconGithub, IconInstagram, IconLinkedin, IconWhatsapp, IconMail, IconExternalLink } from '../icons';
 import { BRAND_LOGO_DATA_URI } from '../lib/brandLogo';
 
@@ -60,6 +60,12 @@ function SocialLink({ icon, label, url }: { icon: React.ReactNode; label: string
 }
 
 export function AboutView() {
+  const [version, setVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    window.alliminate.getVersion().then(setVersion).catch(() => setVersion(null));
+  }, []);
+
   return (
     <section className="view active">
       <div className="view-header">
@@ -73,7 +79,7 @@ export function AboutView() {
         <div className="glass-card" style={{ padding: '24px', display: 'flex', gap: 18, alignItems: 'center' }}>
           <img src={BRAND_LOGO_DATA_URI} alt="AllieMinate" style={{ width: 56, height: 56, borderRadius: 14 }} />
           <div>
-            <div style={{ fontSize: 20, fontWeight: 700 }}>AllieMinate</div>
+            <div style={{ fontSize: 20, fontWeight: 700 }}>AllieMinate{version ? ` v${version}` : ''}</div>
             <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 4 }}>A Space With You</div>
           </div>
         </div>
