@@ -4,13 +4,6 @@ import PlatformCard from './PlatformCard.astro';
 ---
 <section class="section" id="platforms">
   <div class="wrap">
-    <div class="section-label">Supported Platforms</div>
-    <h2 class="section-title">One app, three real installers.</h2>
-    <p class="section-intro">
-      None of these are code-signed with a paid certificate yet — expect a one-time warning on
-      first install (details below each platform), not a sign of a bad download.
-    </p>
-
     <div class="grid-3" data-reveal-group>
       {platforms.map((p) => <PlatformCard platform={p} />)}
     </div>

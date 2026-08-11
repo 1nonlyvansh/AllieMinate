@@ -27,7 +27,7 @@ function applyPlatform(id) {
       el.setAttribute('href', match.downloadHref);
     } else {
       el.textContent = 'Choose your platform';
-      el.setAttribute('href', '#download');
+      el.setAttribute('href', '/download');
     }
   });
 }
@@ -35,6 +35,13 @@ function applyPlatform(id) {
 document.addEventListener('DOMContentLoaded', () => {
   const detected = detectPlatform();
   applyPlatform(detected);
+
+  // Stamps data-platform on <html> so variables.css can switch to the real Windows Fluent
+  // accent/radius (#0067c0, flatter panels) for Windows visitors — same idea as the app itself
+  // looking different per platform, not a new invented behavior.
+  if (detected) {
+    document.documentElement.setAttribute('data-platform', detected);
+  }
 
   // Manual platform-card clicks override detection and persist across visits.
   document.querySelectorAll('[data-platform-choice]').forEach((card) => {

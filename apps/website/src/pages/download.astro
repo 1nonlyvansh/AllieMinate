@@ -1,0 +1,15 @@
+---
+import Base from '../layouts/Base.astro';
+import Nav from '../components/Nav.astro';
+import PageHeader from '../components/PageHeader.astro';
+import DownloadSection from '../components/DownloadSection.astro';
+import Footer from '../components/Footer.astro';
+---
+<Base title="Download — AllieMinate" description="Download AllieMinate v2.8.8 for macOS, Windows, or Android." path="/download">
+  <Nav />
+  <main id="main">
+    <PageHeader eyebrow="Download" title="Choose your platform" intro="Every download link goes to the latest release on GitHub. Current version: v2.8.8." />
+    <DownloadSection />
+  </main>
+  <Footer />
+</Base>

@@ -17,9 +17,10 @@ const { size = 120, class: className = '' } = Astro.props;
 >
   <rect x="30" y="8" width="140" height="82" rx="6" stroke="currentColor" stroke-width="3.4"/>
   <rect x="40" y="18" width="120" height="62" fill="currentColor" fill-opacity="0.08"/>
-  <rect x="88" y="37" width="10" height="10" fill="currentColor"/>
-  <rect x="102" y="37" width="10" height="10" fill="currentColor"/>
-  <rect x="88" y="51" width="10" height="10" fill="currentColor"/>
-  <rect x="102" y="51" width="10" height="10" fill="currentColor"/>
+  <!-- Windows glyph — the exact same path as IconWindows in the desktop app's own icons.tsx,
+       reused here for consistency, scaled/centered on the screen. -->
+  <g transform="translate(87 36) scale(1.0833)" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.6">
+    <path d="M3 6.5 11 5.3V11.6H3ZM12.2 5.1 21 3.7v7.9h-8.8ZM3 12.6h8v6.3L3 17.7ZM12.2 12.6H21V20l-8.8-1.3Z" />
+  </g>
   <path d="M10 106 H190 L178 92 H22 Z" stroke="currentColor" stroke-width="3.4" stroke-linejoin="round"/>
 </svg>

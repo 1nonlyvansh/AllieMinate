@@ -1,25 +1,36 @@
-/* Design tokens — sourced from the desktop app's own theme, not invented for the site.
-   Dark values match apps/desktop/src/renderer/ (inline CSS vars used across views) and
-   glass.css's dark-mode block; light values mirror glass.css's light (default) block. */
+/* Design tokens copied directly from the real app — apps/desktop/src/renderer/styles/mac/glass.css
+   (light = default, dark = prefers-color-scheme) and .../windows/fluent.css (accent #0067c0,
+   flatter Mica-style panels). This is the actual AllieMinate look, not an invented marketing
+   palette: translucent glass, blue accent, big soft radii, light-by-default. */
 :root {
-  --bg: #050d1a;
-  --bg-elevated: #0a1526;
-  --card: #0d1b2e;
-  --card-strong: rgba(13, 27, 46, 0.85);
-  --border: #14283d;
-  --accent: #00e5ff;
-  --accent-ink: #001018;
-  --text: #e8f4f8;
-  --text-secondary: #a9c3ce;
-  --text-dim: #7ba3b8;
-  --online: #32d74b;
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-bg-strong: rgba(255, 255, 255, 0.72);
+  --glass-bg-soft: rgba(255, 255, 255, 0.4);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-blur: 28px;
+
+  --text: #1d1d1f;
+  --text-secondary: rgba(29, 29, 31, 0.62);
+  --text-tertiary: rgba(29, 29, 31, 0.4);
+
+  --accent: #0a84ff;
+  --accent-soft: rgba(10, 132, 255, 0.13);
+  --accent-text: #0a5fd8;
+  --accent-ink: #ffffff;
+
+  --online: #30d158;
   --offline: #ff453a;
-  --warning: #ffa60a;
+  --warning: #c96a00;
+  --warning-soft: rgba(255, 159, 10, 0.14);
+
+  --hairline: rgba(0, 0, 0, 0.08);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.28);
 
   --r-sm: 9px;
   --r-md: 14px;
   --r-lg: 20px;
-  --r-xl: 28px;
+  --r-xl: 26px;
 
   --space-1: 8px;
   --space-2: 16px;
@@ -29,31 +40,71 @@
   --space-8: 64px;
   --space-10: 80px;
 
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
-  --blur: 12px;
-
   --font-system: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable', 'Segoe UI', system-ui, Roboto, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
 
   --max-width: 1200px;
-
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Mesh-gradient page background — the app's own glass surfaces blur whatever the OS desktop
+     is showing; a website has no desktop behind it, so this stands in for one. Colors are the
+     accent blue plus the same warning/online hues already in the token set above, not new ones. */
+  --mesh-bg: #eef3f9;
+  --mesh-blob-1: rgba(10, 132, 255, 0.16);
+  --mesh-blob-2: rgba(48, 209, 88, 0.10);
+  --mesh-blob-3: rgba(255, 159, 10, 0.08);
 }
 
-/* Light mode — offered for prefers-color-scheme, but the product is dark-first (matches the
-   desktop app's default), so light mode is a supported variant, not the primary identity. */
-@media (prefers-color-scheme: light) {
+@media (prefers-color-scheme: dark) {
   :root {
-    --bg: #f5f7fa;
-    --bg-elevated: #ffffff;
-    --card: #ffffff;
-    --card-strong: rgba(255, 255, 255, 0.9);
-    --border: rgba(10, 20, 35, 0.1);
-    --accent: #0a84ff;
-    --accent-ink: #ffffff;
-    --text: #0f1a24;
-    --text-secondary: #48607a;
-    --text-dim: #6b8299;
-    --shadow-card: 0 1px 2px rgba(15, 26, 36, 0.04), 0 12px 32px rgba(15, 26, 36, 0.08);
+    --glass-bg: rgba(38, 38, 41, 0.55);
+    --glass-bg-strong: rgba(44, 44, 47, 0.75);
+    --glass-bg-soft: rgba(38, 38, 41, 0.38);
+    --glass-border: rgba(255, 255, 255, 0.1);
+
+    --text: #f5f5f7;
+    --text-secondary: rgba(245, 245, 247, 0.62);
+    --text-tertiary: rgba(245, 245, 247, 0.4);
+
+    --accent: #409cff;
+    --accent-soft: rgba(64, 156, 255, 0.18);
+    --accent-text: #7cbeff;
+    --accent-ink: #001633;
+
+    --online: #32d74b;
+    --offline: #ff453a;
+    --warning: #ffa60a;
+    --warning-soft: rgba(255, 166, 10, 0.16);
+
+    --hairline: rgba(255, 255, 255, 0.08);
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
+    --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.55);
+
+    --mesh-bg: #08090d;
+    --mesh-blob-1: rgba(64, 156, 255, 0.22);
+    --mesh-blob-2: rgba(50, 215, 75, 0.1);
+    --mesh-blob-3: rgba(255, 166, 10, 0.08);
+  }
+}
+
+/* A visitor's OS is detected client-side (scripts/platform-detection.js) and stamped as
+   data-platform on <html> — Windows visitors get the real Fluent/Mica treatment (flatter
+   panels, smaller radius, #0067c0 accent) instead of the macOS glass look, same as the app
+   itself looks different per platform. Falls back to the macOS look for everyone else. */
+:root[data-platform='windows'] {
+  --accent: #0067c0;
+  --accent-text: #0067c0;
+  --glass-blur: 10px;
+  --r-lg: 8px;
+  --r-md: 8px;
+  --r-sm: 6px;
+  --r-xl: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-platform='windows'] {
+    --accent: #60cdff;
+    --accent-text: #60cdff;
+    --accent-ink: #001633;
   }
 }

@@ -1,0 +1,23 @@
+---
+import Base from '../layouts/Base.astro';
+import Nav from '../components/Nav.astro';
+import PageHeader from '../components/PageHeader.astro';
+import CloudProviders from '../components/CloudProviders.astro';
+import CrossDevice from '../components/CrossDevice.astro';
+import FileTransfer from '../components/FileTransfer.astro';
+import SyncSection from '../components/SyncSection.astro';
+import FeatureExplorer from '../components/FeatureExplorer.astro';
+import Footer from '../components/Footer.astro';
+---
+<Base title="Product — AllieMinate" description="Cloud aggregation, device pairing, Sync Pairs, Nearby Share, and Universal Clipboard — what AllieMinate actually does." path="/product">
+  <Nav />
+  <main id="main">
+    <PageHeader eyebrow="Product" title="Every cloud. Every device. One app." intro="Cloud aggregation across six providers, plus direct device-to-device sync, transfer, and clipboard — no cloud relay for any of it." />
+    <CloudProviders />
+    <CrossDevice />
+    <FileTransfer />
+    <SyncSection />
+    <FeatureExplorer />
+  </main>
+  <Footer />
+</Base>

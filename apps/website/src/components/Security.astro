@@ -18,9 +18,6 @@ const limitations = [
 ---
 <section class="section" id="security">
   <div class="wrap">
-    <div class="section-label">Security &amp; Privacy</div>
-    <h2 class="section-title">Honest about what protects you — and what doesn't.</h2>
-
     <div class="sec-grid" data-reveal-group>
       {pillars.map((p) => (
         <div class="card sec-card reveal">
@@ -61,13 +58,13 @@ const limitations = [
     margin: 10px 0 6px;
   }
   .sec-card p {
-    color: var(--text-dim);
+    color: var(--text-secondary);
     font-size: 13px;
     line-height: 1.55;
   }
   .limitations-card {
     padding: var(--space-3) var(--space-4);
-    border-color: color-mix(in srgb, var(--warning) 35%, var(--border));
+    border-color: color-mix(in srgb, var(--warning) 35%, var(--glass-border));
   }
   .limitations-title {
     color: var(--warning);

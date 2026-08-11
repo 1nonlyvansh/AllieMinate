@@ -1,4 +1,12 @@
 ---
+const PAGES = [
+  { href: '/product', label: 'Product' },
+  { href: '/platforms', label: 'Platforms' },
+  { href: '/security', label: 'Security' },
+  { href: '/download', label: 'Download' },
+];
+const path = Astro.url.pathname;
+const isActive = (href: string) => path === href || path === href + '/';
 ---
 <header class="nav" id="nav">
   <div class="wrap nav-inner">
@@ -8,15 +16,12 @@
     </a>
 
     <nav class="nav-links" aria-label="Primary">
-      <a href="#product">Product</a>
-      <a href="#platforms">Platforms</a>
-      <a href="#security">Security</a>
-      <a href="#download">Download</a>
+      {PAGES.map((p) => <a href={p.href} aria-current={isActive(p.href) ? 'page' : undefined}>{p.label}</a>)}
       <a href="https://github.com/1nonlyvansh/AllieMinate" target="_blank" rel="noopener">GitHub</a>
     </nav>
 
     <div class="nav-cta">
-      <a class="btn btn-primary" href="#download" data-primary-download>Download</a>
+      <a class="btn btn-primary" href="/download" data-primary-download>Download</a>
     </div>
 
     <button class="nav-burger" id="nav-burger" aria-label="Open menu" aria-expanded="false" aria-controls="nav-mobile">
@@ -25,10 +30,7 @@
   </div>
 
   <div class="nav-mobile" id="nav-mobile" hidden>
-    <a href="#product">Product</a>
-    <a href="#platforms">Platforms</a>
-    <a href="#security">Security</a>
-    <a href="#download">Download</a>
+    {PAGES.map((p) => <a href={p.href} aria-current={isActive(p.href) ? 'page' : undefined}>{p.label}</a>)}
     <a href="https://github.com/1nonlyvansh/AllieMinate" target="_blank" rel="noopener">GitHub</a>
   </div>
 </header>
@@ -45,10 +47,10 @@
     border-bottom: 1px solid transparent;
   }
   .nav.nav-solid {
-    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    background: color-mix(in srgb, var(--glass-bg-soft) 92%, transparent);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border-bottom-color: var(--border);
+    border-bottom-color: var(--glass-border);
   }
   .nav-inner {
     display: flex;
@@ -73,11 +75,19 @@
   }
   .nav-links a {
     text-decoration: none;
-    color: var(--text-dim);
+    color: var(--text-secondary);
     transition: color 0.15s ease;
   }
   .nav-links a:hover {
     color: var(--text);
+  }
+  .nav-links a[aria-current='page'] {
+    color: var(--accent-text);
+    font-weight: 600;
+  }
+  .nav-mobile a[aria-current='page'] {
+    color: var(--accent-text);
+    font-weight: 600;
   }
   .nav-burger {
     display: none;
@@ -102,8 +112,8 @@
     flex-direction: column;
     gap: 2px;
     padding: var(--space-2) var(--space-3) var(--space-3);
-    background: var(--bg);
-    border-bottom: 1px solid var(--border);
+    background: var(--glass-bg-soft);
+    border-bottom: 1px solid var(--glass-border);
   }
   .nav-mobile:not([hidden]) {
     display: flex;
@@ -116,7 +126,7 @@
     font-size: 15px;
   }
   .nav-mobile a:hover {
-    background: var(--card);
+    background: var(--glass-bg);
   }
 
   @media (max-width: 767px) {

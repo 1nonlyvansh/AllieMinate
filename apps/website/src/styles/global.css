@@ -22,9 +22,18 @@ html {
   }
 }
 
+/* Mesh-gradient backdrop — fixed so it doesn't repeat/shift as the page scrolls, giving every
+   glass card below something soft and colorful to blur, the same way the app's glass blurs
+   whatever is behind the window on a real desktop. */
 body {
   margin: 0;
-  background: var(--bg);
+  min-height: 100vh;
+  background-color: var(--mesh-bg);
+  background-image:
+    radial-gradient(720px circle at 12% 8%, var(--mesh-blob-1), transparent 60%),
+    radial-gradient(640px circle at 88% 28%, var(--mesh-blob-2), transparent 55%),
+    radial-gradient(800px circle at 50% 92%, var(--mesh-blob-3), transparent 60%);
+  background-attachment: fixed;
   color: var(--text);
   font-family: var(--font-system);
   line-height: 1.6;
@@ -70,7 +79,7 @@ p {
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-text);
   margin-bottom: var(--space-1);
 }
 
@@ -82,18 +91,18 @@ p {
 }
 
 .section-intro {
-  color: var(--text-dim);
+  color: var(--text-secondary);
   font-size: 16px;
   max-width: 640px;
   margin-bottom: var(--space-4);
 }
 
 .card {
-  background: var(--card-strong);
-  border: 1px solid var(--border);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
   border-radius: var(--r-lg);
-  backdrop-filter: blur(var(--blur));
-  -webkit-backdrop-filter: blur(var(--blur));
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
   box-shadow: var(--shadow-card);
 }
 
@@ -103,12 +112,12 @@ p {
   justify-content: center;
   gap: 8px;
   min-height: 44px;
-  padding: 12px 22px;
-  border-radius: var(--r-sm);
+  padding: 12px 24px;
+  border-radius: 999px;
   text-decoration: none;
   font-weight: 600;
   font-size: 14.5px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   cursor: pointer;
   transition: transform 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out), background 0.15s var(--ease-out);
 }
@@ -117,16 +126,19 @@ p {
   background: var(--accent);
   color: var(--accent-ink);
   border-color: transparent;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .btn-primary:hover {
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 45%, transparent);
   transform: translateY(-1px);
 }
 
 .btn-secondary {
   color: var(--text);
-  background: var(--card);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .btn-secondary:hover {
@@ -201,14 +213,15 @@ p {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
-  background: var(--card);
-  border: 1px solid var(--border);
-  color: var(--text-dim);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
 }
 
 .badge-warning {
   color: var(--warning);
-  border-color: color-mix(in srgb, var(--warning) 40%, var(--border));
+  background: var(--warning-soft);
+  border-color: transparent;
 }
 
 .grid-2 {
