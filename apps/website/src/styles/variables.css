@@ -1,0 +1,59 @@
+/* Design tokens — sourced from the desktop app's own theme, not invented for the site.
+   Dark values match apps/desktop/src/renderer/ (inline CSS vars used across views) and
+   glass.css's dark-mode block; light values mirror glass.css's light (default) block. */
+:root {
+  --bg: #050d1a;
+  --bg-elevated: #0a1526;
+  --card: #0d1b2e;
+  --card-strong: rgba(13, 27, 46, 0.85);
+  --border: #14283d;
+  --accent: #00e5ff;
+  --accent-ink: #001018;
+  --text: #e8f4f8;
+  --text-secondary: #a9c3ce;
+  --text-dim: #7ba3b8;
+  --online: #32d74b;
+  --offline: #ff453a;
+  --warning: #ffa60a;
+
+  --r-sm: 9px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-6: 48px;
+  --space-8: 64px;
+  --space-10: 80px;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
+  --blur: 12px;
+
+  --font-system: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable', 'Segoe UI', system-ui, Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
+
+  --max-width: 1200px;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Light mode — offered for prefers-color-scheme, but the product is dark-first (matches the
+   desktop app's default), so light mode is a supported variant, not the primary identity. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f5f7fa;
+    --bg-elevated: #ffffff;
+    --card: #ffffff;
+    --card-strong: rgba(255, 255, 255, 0.9);
+    --border: rgba(10, 20, 35, 0.1);
+    --accent: #0a84ff;
+    --accent-ink: #ffffff;
+    --text: #0f1a24;
+    --text-secondary: #48607a;
+    --text-dim: #6b8299;
+    --shadow-card: 0 1px 2px rgba(15, 26, 36, 0.04), 0 12px 32px rgba(15, 26, 36, 0.08);
+  }
+}

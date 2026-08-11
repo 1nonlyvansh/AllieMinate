@@ -1,0 +1,47 @@
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes draw-path {
+  from { stroke-dashoffset: var(--dash, 240); }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes pulse-dot {
+  0% { opacity: 0.2; offset-distance: 0%; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { opacity: 0.2; offset-distance: 100%; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.js-enabled .float {
+  animation: float-y 4s ease-in-out infinite;
+}
+
+.js-enabled .connection-path {
+  stroke-dasharray: var(--dash, 240);
+  animation: draw-path 2.4s var(--ease-out) forwards;
+}
+
+.js-enabled .connection-dot {
+  offset-path: var(--offset-path);
+  animation: pulse-dot 2.6s linear infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .js-enabled .float,
+  .js-enabled .connection-path,
+  .js-enabled .connection-dot {
+    animation: none !important;
+  }
+  .js-enabled .connection-path {
+    stroke-dashoffset: 0;
+  }
+}

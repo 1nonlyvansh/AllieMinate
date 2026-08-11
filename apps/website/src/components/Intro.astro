@@ -1,0 +1,57 @@
+---
+import Icon from './Icon.astro';
+---
+<section class="section" id="product">
+  <div class="wrap">
+    <h2 class="visually-hidden">Why AllieMinate</h2>
+    <div class="grid-3" data-reveal-group>
+      <div class="card intro-card reveal">
+        <Icon name="cloud" size={26} />
+        <h3>Cloud Aggregation</h3>
+        <p>Stop switching between six apps. Browse, search, and organize every cloud account you use in one view.</p>
+      </div>
+      <div class="card intro-card reveal">
+        <Icon name="devices" size={26} />
+        <h3>Device-to-Device</h3>
+        <p>Pair your phone and computers over LAN. Sync folders, share your clipboard, transfer files — no cloud relay, no account required.</p>
+      </div>
+      <div class="card intro-card reveal">
+        <Icon name="shield" size={26} />
+        <h3>Open & Honest</h3>
+        <p>MIT licensed. No subscription. No central server. No hidden telemetry. You own your data and your infrastructure.</p>
+      </div>
+    </div>
+
+    <p class="intro-statement reveal">
+      Most cloud managers stop at "browse your cloud." AllieMinate also does device-to-device sync,
+      LAN file transfer, clipboard sharing, and remote unlock — one app instead of four.
+    </p>
+  </div>
+</section>
+
+<style>
+  .intro-card {
+    padding: var(--space-3);
+    color: var(--accent);
+  }
+  .intro-card h3 {
+    color: var(--text);
+    font-size: 17px;
+    margin-top: var(--space-2);
+    margin-bottom: 8px;
+  }
+  .intro-card p {
+    color: var(--text-dim);
+    font-size: 14.5px;
+    line-height: 1.6;
+  }
+  .intro-statement {
+    text-align: center;
+    max-width: 720px;
+    margin: var(--space-6) auto 0;
+    font-size: 19px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.5;
+  }
+</style>

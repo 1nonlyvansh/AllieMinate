@@ -1,0 +1,59 @@
+---
+const links = [
+  { label: 'GitHub', href: 'https://github.com/1nonlyvansh/AllieMinate' },
+  { label: 'Privacy Policy', href: '/privacy' },
+  { label: 'Terms of Service', href: '/terms' },
+  { label: 'Developer', href: 'https://github.com/1nonlyvansh' },
+  { label: 'Contact', href: 'mailto:vansh080605@gmail.com' },
+];
+---
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <img src="/images/logo.svg" alt="" width="24" height="24" />
+    <p class="footer-copy">MIT © 2026 Vansh Kishore Sharma</p>
+    <nav class="footer-links" aria-label="Footer">
+      {links.map((l) => (
+        <a href={l.href} target={l.href.startsWith('http') ? '_blank' : undefined} rel={l.href.startsWith('http') ? 'noopener' : undefined}>{l.label}</a>
+      ))}
+    </nav>
+    <p class="footer-tagline">A space with you.</p>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    border-top: 1px solid var(--border);
+    padding: var(--space-6) 0 var(--space-4);
+    text-align: center;
+  }
+  .footer-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .footer-copy {
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+  .footer-links {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-size: 13px;
+  }
+  .footer-links a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .footer-links a:hover {
+    text-decoration: underline;
+  }
+  .footer-tagline {
+    color: var(--text-dim);
+    font-size: 12.5px;
+    font-style: italic;
+    margin-top: 4px;
+  }
+</style>

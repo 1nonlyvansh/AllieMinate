@@ -20,7 +20,7 @@ apps/
   backend/    Fastify server — talks to every cloud provider and every paired device.
   desktop/    Electron + React — the macOS/Windows app.
   android/    Kotlin + Jetpack Compose — the phone app.
-  website/    Static marketing site (apps/website), no build step.
+  website/    Astro static site (apps/website) — builds to static HTML/CSS/JS.
 packages/
   shared/     TypeScript types shared between backend and desktop.
 ```

@@ -9,6 +9,7 @@
   "allowScripts": {
     "electron@33.4.11": true,
     "esbuild@0.23.1": true,
+    "esbuild@0.28.2": true,
     "fsevents@2.3.3": true
   }
 }

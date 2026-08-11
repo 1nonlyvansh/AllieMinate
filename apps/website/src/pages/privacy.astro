@@ -1,0 +1,103 @@
+---
+import Base from '../layouts/Base.astro';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+---
+<Base title="Privacy Policy — AllieMinate" description="What AllieMinate accesses, how it's used, and what it does not do with it." path="/privacy">
+  <Nav />
+  <main id="main" class="legal-page">
+    <div class="wrap legal-wrap">
+      <h1>Privacy Policy</h1>
+      <p class="updated">Last updated: August 11, 2026</p>
+
+      <p>AllieMinate is a cloud storage aggregation and device-sync application. This policy explains what data AllieMinate accesses, how it's used, and — most importantly — what AllieMinate does <em>not</em> do with it.</p>
+
+      <h2>The short version</h2>
+      <p>AllieMinate has no server of its own that stores, sees, or relays your files, credentials, or account data. It runs entirely on your own devices. When you connect a cloud account (e.g. Google Drive) or pair a device (e.g. your phone), all communication happens either directly between your device and the cloud provider's own servers, or directly between your own paired devices over your local network. Nothing passes through any server operated by AllieMinate or its developer, because none exists.</p>
+
+      <h2>Google Account data (Google Drive integration)</h2>
+      <p>When you connect a Google account through "Add Google Account," AllieMinate requests the <code>drive.file</code> scope. This scope limits access to only the files and folders you explicitly open, create, or select through AllieMinate's own interface — it does not grant blanket access to your entire Drive.</p>
+      <ul>
+        <li>AllieMinate uses this access solely to let you browse, upload, download, rename, move, and organize the files you choose to interact with through the app.</li>
+        <li>OAuth tokens are stored locally on your own device only (in the app's local configuration), never transmitted to or stored on any third-party or AllieMinate-operated server.</li>
+        <li>AllieMinate does not read, scan, analyze, or share the content of your files for any purpose other than displaying and transferring them at your direct request.</li>
+        <li>AllieMinate does not sell, rent, or share your Google user data with any third party, and does not use it for advertising.</li>
+        <li>You can revoke AllieMinate's access at any time from your Google Account's <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Third-party access settings</a>, or by removing the account from within AllieMinate's Settings.</li>
+      </ul>
+
+      <h2>Other cloud providers</h2>
+      <p>The same principle applies to every other provider AllieMinate supports (OneDrive, Backblaze B2, IDrive e2, MEGA, pCloud): credentials are stored locally on your device, and all file operations happen directly between your device and that provider's API.</p>
+
+      <h2>Device pairing and local network features</h2>
+      <p>Pairing a phone, Mac, or Windows PC with AllieMinate (for file transfer, Sync Pairs, Universal Clipboard, Nearby Share, or remote unlock) works entirely over your own local network via direct, token-authenticated connections between your devices. No pairing data, transferred file, or clipboard content is ever routed through an external server.</p>
+
+      <h2>Data AllieMinate does not collect</h2>
+      <ul>
+        <li>No analytics or telemetry is sent off your device.</li>
+        <li>No account registration is required to use AllieMinate.</li>
+        <li>No file contents, filenames, or metadata are transmitted anywhere other than the cloud provider you explicitly connected, or a device you explicitly paired.</li>
+      </ul>
+
+      <h2>Changes to this policy</h2>
+      <p>If this policy changes, the updated version will be posted at this same URL with a revised date above.</p>
+
+      <h2>Contact</h2>
+      <p>Questions about this policy or your data: <a href="mailto:vansh080605@gmail.com">vansh080605@gmail.com</a></p>
+    </div>
+  </main>
+  <Footer />
+</Base>
+
+<style>
+  .legal-page {
+    padding-top: 128px;
+  }
+  .legal-wrap {
+    max-width: 720px;
+    padding-bottom: var(--space-10);
+  }
+  .legal-wrap h1 {
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .legal-wrap .updated {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-top: 6px;
+    margin-bottom: var(--space-4);
+  }
+  .legal-wrap h2 {
+    font-size: 19px;
+    margin-top: var(--space-4);
+    margin-bottom: 10px;
+  }
+  .legal-wrap p,
+  .legal-wrap li {
+    color: var(--text-secondary);
+    font-size: 15px;
+    line-height: 1.7;
+  }
+  .legal-wrap ul {
+    padding-left: 20px;
+    margin-top: 10px;
+  }
+  .legal-wrap li {
+    margin-bottom: 8px;
+  }
+  .legal-wrap a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .legal-wrap a:hover {
+    text-decoration: underline;
+  }
+  .legal-wrap code {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+  }
+</style>

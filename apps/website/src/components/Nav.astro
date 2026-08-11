@@ -1,0 +1,147 @@
+---
+---
+<header class="nav" id="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="nav-brand" aria-label="AllieMinate home">
+      <img src="/images/logo.svg" alt="" width="28" height="28" />
+      <span>AllieMinate</span>
+    </a>
+
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#product">Product</a>
+      <a href="#platforms">Platforms</a>
+      <a href="#security">Security</a>
+      <a href="#download">Download</a>
+      <a href="https://github.com/1nonlyvansh/AllieMinate" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+
+    <div class="nav-cta">
+      <a class="btn btn-primary" href="#download" data-primary-download>Download</a>
+    </div>
+
+    <button class="nav-burger" id="nav-burger" aria-label="Open menu" aria-expanded="false" aria-controls="nav-mobile">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+
+  <div class="nav-mobile" id="nav-mobile" hidden>
+    <a href="#product">Product</a>
+    <a href="#platforms">Platforms</a>
+    <a href="#security">Security</a>
+    <a href="#download">Download</a>
+    <a href="https://github.com/1nonlyvansh/AllieMinate" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</header>
+
+<style>
+  .nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: transparent;
+    transition: background 0.25s ease, border-color 0.25s ease, backdrop-filter 0.25s ease;
+    border-bottom: 1px solid transparent;
+  }
+  .nav.nav-solid {
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom-color: var(--border);
+  }
+  .nav-inner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    height: 64px;
+  }
+  .nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 16px;
+    text-decoration: none;
+    color: var(--text);
+    margin-right: auto;
+  }
+  .nav-links {
+    display: flex;
+    gap: var(--space-3);
+    font-size: 14.5px;
+  }
+  .nav-links a {
+    text-decoration: none;
+    color: var(--text-dim);
+    transition: color 0.15s ease;
+  }
+  .nav-links a:hover {
+    color: var(--text);
+  }
+  .nav-burger {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 44px;
+    height: 44px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+  }
+  .nav-burger span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: var(--text);
+    margin: 0 auto;
+  }
+  .nav-mobile {
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-2) var(--space-3) var(--space-3);
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-mobile:not([hidden]) {
+    display: flex;
+  }
+  .nav-mobile a {
+    text-decoration: none;
+    color: var(--text);
+    padding: 12px 8px;
+    border-radius: 8px;
+    font-size: 15px;
+  }
+  .nav-mobile a:hover {
+    background: var(--card);
+  }
+
+  @media (max-width: 767px) {
+    .nav-links,
+    .nav-cta {
+      display: none;
+    }
+    .nav-burger {
+      display: flex;
+    }
+  }
+</style>
+
+<script>
+  const burger = document.getElementById('nav-burger');
+  const mobile = document.getElementById('nav-mobile');
+  burger?.addEventListener('click', () => {
+    const open = mobile?.hasAttribute('hidden');
+    if (mobile) mobile.hidden = !open;
+    burger.setAttribute('aria-expanded', String(!!open));
+  });
+  mobile?.querySelectorAll('a').forEach((a) =>
+    a.addEventListener('click', () => {
+      mobile.hidden = true;
+      burger?.setAttribute('aria-expanded', 'false');
+    })
+  );
+</script>

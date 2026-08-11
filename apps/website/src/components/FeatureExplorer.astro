@@ -1,0 +1,118 @@
+---
+import features from '../data/features.json';
+import Icon from './Icon.astro';
+---
+<section class="section" id="features">
+  <div class="wrap">
+    <div class="section-label">Feature Explorer</div>
+    <h2 class="section-title">Everything, verified against the codebase.</h2>
+
+    <div class="feature-grid" data-reveal-group>
+      {features.map((f, i) => (
+        <div class="card feature-card reveal">
+          <button
+            class="feature-head"
+            type="button"
+            data-feature-toggle
+            aria-expanded="false"
+            aria-controls={`feature-body-${i}`}
+          >
+            <Icon name={f.icon} size={22} />
+            <span class="feature-title">{f.title}</span>
+            <span class="feature-chevron" aria-hidden="true">⌄</span>
+          </button>
+          <div class="feature-body" id={`feature-body-${i}`}>
+            <div class="feature-body-inner">
+              <p>{f.desc}</p>
+              <a href={f.anchor}>Learn more →</a>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-2);
+  }
+  .feature-card {
+    text-align: left;
+    padding: var(--space-2) var(--space-3);
+  }
+  .feature-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--accent);
+    font: inherit;
+    cursor: pointer;
+  }
+  .feature-title {
+    color: var(--text);
+    font-weight: 600;
+    font-size: 14.5px;
+    flex: 1;
+    text-align: left;
+  }
+  .feature-chevron {
+    color: var(--text-dim);
+    transition: transform 0.2s var(--ease-out);
+  }
+  .feature-card.is-open .feature-chevron {
+    transform: rotate(180deg);
+  }
+  .feature-body {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.25s var(--ease-out);
+  }
+  .feature-card.is-open .feature-body {
+    grid-template-rows: 1fr;
+  }
+  .feature-body-inner {
+    overflow: hidden;
+  }
+  .feature-body p {
+    color: var(--text-dim);
+    font-size: 13.5px;
+    line-height: 1.6;
+    margin-top: 10px;
+  }
+  .feature-body a {
+    display: inline-block;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 13px;
+    margin-top: 6px;
+  }
+
+  @media (max-width: 1023px) {
+    .feature-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  @media (max-width: 480px) {
+    .feature-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<script>
+  document.querySelectorAll('[data-feature-toggle]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const card = btn.closest('.feature-card');
+      const expanded = btn.getAttribute('aria-expanded') === 'true';
+      btn.setAttribute('aria-expanded', String(!expanded));
+      card?.classList.toggle('is-open', !expanded);
+    });
+  });
+</script>

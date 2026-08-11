@@ -1,0 +1,47 @@
+[
+  {
+    "id": "mac",
+    "name": "macOS",
+    "badge": "Apple Silicon & Intel · macOS 12+",
+    "device": "mac",
+    "capabilities": [
+      "Full feature set — cloud aggregation, sync, pairing, clipboard",
+      "Menu bar quick-access panel with inline preview",
+      "App Lock via Touch ID or app PIN"
+    ],
+    "downloadLabel": "Download .dmg",
+    "downloadHref": "https://github.com/1nonlyvansh/AllieMinate/releases/latest/download/AllieMinate.dmg",
+    "installNote": "Unsigned build — Gatekeeper blocks the first launch. Right-click the app → Open, or System Settings → Privacy & Security → Open Anyway.",
+    "guideHref": "https://github.com/1nonlyvansh/AllieMinate/blob/main/docs/installation/macos.md"
+  },
+  {
+    "id": "windows",
+    "name": "Windows",
+    "badge": "Windows 10/11 · 64-bit",
+    "device": "windows",
+    "capabilities": [
+      "Full feature set — cloud aggregation, sync, pairing, clipboard",
+      "System tray quick-access panel",
+      "App Lock via app PIN (Windows Hello not yet implemented)"
+    ],
+    "downloadLabel": "Get the installer",
+    "downloadHref": "https://github.com/1nonlyvansh/AllieMinate/releases/latest",
+    "installNote": "Unsigned build — SmartScreen shows a warning. Click More info → Run anyway.",
+    "guideHref": "https://github.com/1nonlyvansh/AllieMinate/blob/main/docs/installation/windows.md"
+  },
+  {
+    "id": "android",
+    "name": "Android",
+    "badge": "Android 8.0+ (API 26+) · Sideload only",
+    "device": "android",
+    "capabilities": [
+      "Cloud browsing via a paired desktop's connected accounts",
+      "Camera/folder backup, Sync Pairs, Nearby Share",
+      "Biometric App Lock, up to 5 paired desktops"
+    ],
+    "downloadLabel": "Download .apk",
+    "downloadHref": "https://github.com/1nonlyvansh/AllieMinate/releases/latest/download/AllieMinate.apk",
+    "installNote": "Not on the Play Store — allow \"Install unknown apps\" for your browser/files app. This build is signed with the default Android debug keystore, not a release key.",
+    "guideHref": "https://github.com/1nonlyvansh/AllieMinate/blob/main/docs/installation/android.md"
+  }
+]

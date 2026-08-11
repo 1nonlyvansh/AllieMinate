@@ -304,7 +304,7 @@ apps/
               plus native bits: tray, USB pairing, lock screen, Share Extension (macOS).
   android/    Kotlin + Jetpack Compose. The phone app — its own local HTTP server so a
               paired desktop can browse it, plus background workers for sync/backup.
-  website/    Static marketing site — no build step, no backend.
+  website/    Astro static site (apps/website) — builds to static HTML/CSS/JS, no backend/server.
 packages/
   shared/     TypeScript types shared between backend and desktop.
 ```

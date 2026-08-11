@@ -1,0 +1,81 @@
+---
+import '../styles/global.css';
+import '../styles/animations.css';
+import platforms from '../data/platforms.json';
+
+interface Props {
+  title?: string;
+  description?: string;
+  path?: string;
+}
+
+const {
+  title = 'AllieMinate — One Workspace for Every Cloud, Every Device',
+  description = 'Unify Google Drive, OneDrive, Backblaze B2, IDrive e2, MEGA, and pCloud on Mac, Windows, and Android. Direct device-to-device sync over LAN. No central server. Open source.',
+  path = '/',
+} = Astro.props;
+
+const canonical = new URL(path, 'https://allieminate.vercel.app').toString();
+const ogImage = new URL('/images/og-hero.png', 'https://allieminate.vercel.app').toString();
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'AllieMinate',
+  description,
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'macOS, Windows, Android',
+  softwareVersion: '2.8.8',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  author: { '@type': 'Person', name: 'Vansh Kishore Sharma', url: 'https://github.com/1nonlyvansh' },
+  license: 'https://github.com/1nonlyvansh/AllieMinate/blob/main/LICENSE',
+  url: 'https://allieminate.vercel.app/',
+  downloadUrl: 'https://github.com/1nonlyvansh/AllieMinate/releases/latest',
+};
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="AllieMinate" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+
+    <meta name="theme-color" content="#050d1a" />
+
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+
+    <script is:inline>
+      // Adds js-enabled before first paint so .reveal/.float/.connection-path only opt into
+      // animated states when JS actually runs — no-JS visitors get fully visible content
+      // instead of permanently-hidden (opacity:0) elements. See global.css's .reveal rules.
+      document.documentElement.classList.add('js-enabled');
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to main content</a>
+    <slot />
+    <script is:inline set:html={`window.__ALLIMINATE_PLATFORMS__ = ${JSON.stringify(platforms.map((p) => ({ id: p.id, downloadHref: p.downloadHref })))};`} />
+    <script type="module" src="/scripts/platform-detection.js"></script>
+    <script type="module" src="/scripts/scroll-animations.js"></script>
+  </body>
+</html>

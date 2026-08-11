@@ -1,0 +1,41 @@
+---
+import platforms from '../data/platforms.json';
+import PlatformCard from './PlatformCard.astro';
+---
+<section class="section download-section" id="download">
+  <div class="wrap">
+    <div class="section-label">Download</div>
+    <h2 class="section-title">Choose your platform</h2>
+    <p class="section-intro">
+      Every download link goes to the latest release on GitHub. Version <strong>v2.8.8</strong>.
+    </p>
+
+    <div class="grid-3" data-reveal-group>
+      {platforms.map((p) => <PlatformCard platform={p} compact />)}
+    </div>
+
+    <p class="checksum-note">
+      Verify your download's integrity against the SHA-256 checksum published with each release —
+      see the
+      <a href="https://github.com/1nonlyvansh/AllieMinate/releases/tag/v2.8.8" target="_blank" rel="noopener">release notes</a>
+      and
+      <a href="https://github.com/1nonlyvansh/AllieMinate/blob/main/docs/architecture/build-and-release.md#generating-checksums" target="_blank" rel="noopener">verification instructions</a>.
+    </p>
+  </div>
+</section>
+
+<style>
+  .checksum-note {
+    text-align: center;
+    margin-top: var(--space-4);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .checksum-note a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .checksum-note a:hover {
+    text-decoration: underline;
+  }
+</style>

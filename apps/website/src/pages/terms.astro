@@ -1,0 +1,77 @@
+---
+import Base from '../layouts/Base.astro';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+---
+<Base title="Terms of Service — AllieMinate" description="Terms for downloading, installing, and using AllieMinate." path="/terms">
+  <Nav />
+  <main id="main" class="legal-page">
+    <div class="wrap legal-wrap">
+      <h1>Terms of Service</h1>
+      <p class="updated">Last updated: August 11, 2026</p>
+
+      <h2>Acceptance</h2>
+      <p>By downloading, installing, or using AllieMinate, you agree to these terms. If you don't agree, don't use the app.</p>
+
+      <h2>What AllieMinate is</h2>
+      <p>AllieMinate is a free, open-source cloud storage aggregation and device-sync application for macOS, Windows, and Android. Source code is available at <a href="https://github.com/1nonlyvansh/AllieMinate" target="_blank" rel="noopener">github.com/1nonlyvansh/AllieMinate</a>.</p>
+
+      <h2>Your accounts and data</h2>
+      <p>Any cloud accounts you connect, and any devices you pair, remain entirely under your own control. AllieMinate acts only as a local interface between you and the services/devices you choose to connect — see the <a href="/privacy">Privacy Policy</a> for details on how that access is handled.</p>
+
+      <h2>No warranty</h2>
+      <p>AllieMinate is provided "as is," without warranty of any kind, express or implied, including but not limited to fitness for a particular purpose or non-infringement. You use it at your own risk.</p>
+
+      <h2>Limitation of liability</h2>
+      <p>The developer is not liable for any data loss, corruption, or damages arising from use of AllieMinate, including issues caused by third-party cloud providers, network conditions, or bugs. Always keep independent backups of anything important.</p>
+
+      <h2>Acceptable use</h2>
+      <p>Don't use AllieMinate to access accounts, devices, or data you don't have the right to access.</p>
+
+      <h2>Changes</h2>
+      <p>These terms may be updated from time to time; the current version always lives at this URL.</p>
+
+      <h2>Contact</h2>
+      <p><a href="mailto:vansh080605@gmail.com">vansh080605@gmail.com</a></p>
+    </div>
+  </main>
+  <Footer />
+</Base>
+
+<style>
+  .legal-page {
+    padding-top: 128px;
+  }
+  .legal-wrap {
+    max-width: 720px;
+    padding-bottom: var(--space-10);
+  }
+  .legal-wrap h1 {
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .legal-wrap .updated {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-top: 6px;
+    margin-bottom: var(--space-4);
+  }
+  .legal-wrap h2 {
+    font-size: 19px;
+    margin-top: var(--space-4);
+    margin-bottom: 10px;
+  }
+  .legal-wrap p {
+    color: var(--text-secondary);
+    font-size: 15px;
+    line-height: 1.7;
+  }
+  .legal-wrap a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .legal-wrap a:hover {
+    text-decoration: underline;
+  }
+</style>

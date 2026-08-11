@@ -10,7 +10,7 @@ apps/
   android/    Kotlin + Jetpack Compose. The phone app — its own local HTTP server so a
               paired desktop can browse/push to it, plus background workers for sync and
               camera backup.
-  website/    Static marketing site (apps/website) — no build step, no backend.
+  website/    Astro static site (apps/website) — builds to static HTML/CSS/JS, no backend/server.
 packages/
   shared/     TypeScript types shared between backend and desktop.
 ```

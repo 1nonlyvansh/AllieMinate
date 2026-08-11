@@ -1,0 +1,109 @@
+---
+import Icon from './Icon.astro';
+
+const pillars = [
+  { icon: 'cloud', title: 'No AllieMinate server', desc: 'Cloud calls go straight to each provider\'s own API. Device-to-device traffic stays on your LAN. No project-operated server exists.' },
+  { icon: 'shield', title: 'Credentials stay local', desc: '.env plus a local JSON store, never synced, never leaving your machine.' },
+  { icon: 'devices', title: 'Token-authenticated pairing', desc: 'Per-device tokens exchanged at pairing. QR/USB pairing codes expire in 5 minutes and are single-use.' },
+  { icon: 'shield', title: 'App Lock + destructive-action auth', desc: 'Touch ID (Mac) / biometric+PIN (Android) / app PIN everywhere — required again for actions like deleting a Sync Pair.' },
+];
+
+const limitations = [
+  'LAN traffic between paired devices is not TLS-encrypted (token-authenticated, plaintext transport)',
+  'No Windows Hello yet — falls back to the app PIN',
+  'No paid code-signing — first-install warnings on every platform',
+  'Android APK is a debug build, not release-signed',
+  '8 tracked dependency vulnerabilities (Electron, Fastify, a googleapis-chain uuid advisory)',
+];
+---
+<section class="section" id="security">
+  <div class="wrap">
+    <div class="section-label">Security &amp; Privacy</div>
+    <h2 class="section-title">Honest about what protects you — and what doesn't.</h2>
+
+    <div class="sec-grid" data-reveal-group>
+      {pillars.map((p) => (
+        <div class="card sec-card reveal">
+          <Icon name={p.icon} size={22} />
+          <h3>{p.title}</h3>
+          <p>{p.desc}</p>
+        </div>
+      ))}
+    </div>
+
+    <div class="card limitations-card reveal">
+      <div class="limitations-title">Limitations — flagged, not hidden</div>
+      <ul>
+        {limitations.map((l) => <li>{l}</li>)}
+      </ul>
+      <div class="sec-links">
+        <a href="https://github.com/1nonlyvansh/AllieMinate/blob/main/docs/architecture/security-model.md" target="_blank" rel="noopener">Full security model →</a>
+        <a href="https://github.com/1nonlyvansh/AllieMinate/blob/main/SECURITY.md" target="_blank" rel="noopener">Vulnerability reporting →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .sec-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+  .sec-card {
+    padding: var(--space-2);
+    color: var(--accent);
+  }
+  .sec-card h3 {
+    color: var(--text);
+    font-size: 14.5px;
+    margin: 10px 0 6px;
+  }
+  .sec-card p {
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .limitations-card {
+    padding: var(--space-3) var(--space-4);
+    border-color: color-mix(in srgb, var(--warning) 35%, var(--border));
+  }
+  .limitations-title {
+    color: var(--warning);
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+  .limitations-card ul {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.9;
+  }
+  .sec-links {
+    display: flex;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+    font-size: 13.5px;
+  }
+  .sec-links a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .sec-links a:hover {
+    text-decoration: underline;
+  }
+
+  @media (max-width: 1023px) {
+    .sec-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  @media (max-width: 480px) {
+    .sec-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

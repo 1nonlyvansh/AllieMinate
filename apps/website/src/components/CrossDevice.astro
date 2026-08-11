@@ -1,0 +1,118 @@
+---
+import Icon from './Icon.astro';
+import MacDevice from './devices/MacDevice.astro';
+import WindowsDevice from './devices/WindowsDevice.astro';
+import AndroidDevice from './devices/AndroidDevice.astro';
+
+const capabilities = [
+  { icon: 'share', label: 'File Transfer', desc: 'Bidirectional, direct over LAN' },
+  { icon: 'sync', label: 'Sync Pairs', desc: 'Two-way, backup-only, or download-only' },
+  { icon: 'clipboard', label: 'Universal Clipboard', desc: 'Desktop → phone/desktop only', warn: true },
+  { icon: 'broadcast', label: 'Nearby Share', desc: 'Paired or unpaired devices' },
+  { icon: 'shield', label: 'Remote Unlock', desc: 'Approve unlocking from a paired phone' },
+  { icon: 'history', label: 'Continuity', desc: 'Open on phone, resume on desktop' },
+];
+---
+<section class="section" id="cross-device">
+  <div class="wrap">
+    <div class="section-label">Cross-Device</div>
+    <h2 class="section-title">Your devices, talking directly.</h2>
+    <p class="section-intro">
+      Pair a phone with a desktop, or two desktops with each other, over your own network.
+      Up to 5 simultaneous desktop pairings per phone — self-healing across network changes,
+      including a phone's own hotspot.
+    </p>
+
+    <div class="cd-diagram" aria-hidden="true">
+      <svg class="cd-arcs" viewBox="0 0 600 140" fill="none">
+        <path class="connection-path" style="--dash:260" d="M100 70 C 200 20, 400 20, 500 70" stroke="#00e5ff" stroke-opacity="0.45" stroke-width="2" />
+        <path class="connection-path" style="--dash:260" d="M100 70 C 200 120, 400 120, 500 70" stroke="#00e5ff" stroke-opacity="0.45" stroke-width="2" />
+      </svg>
+      <div class="cd-devices">
+        <div class="cd-device"><MacDevice size={110} /><span>Mac</span></div>
+        <div class="cd-device"><AndroidDevice size={46} /><span>Android</span></div>
+        <div class="cd-device"><WindowsDevice size={110} /><span>Windows</span></div>
+      </div>
+    </div>
+
+    <div class="cd-grid" data-reveal-group>
+      {capabilities.map((c) => (
+        <div class="cd-item reveal">
+          <Icon name={c.icon} size={22} />
+          <div>
+            <div class="cd-item-label">{c.label}{c.warn && <span class="badge badge-warning" style="margin-left:8px;">one-way</span>}</div>
+            <div class="cd-item-desc">{c.desc}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+    <p class="cd-footnote">
+      Universal Clipboard is desktop → phone only in that direction — Android blocks background
+      apps from reading the system clipboard, a platform restriction, not a missing feature.
+    </p>
+  </div>
+</section>
+
+<style>
+  .cd-diagram {
+    position: relative;
+    max-width: 620px;
+    margin: 0 auto var(--space-6);
+    color: var(--text-dim);
+  }
+  .cd-arcs {
+    width: 100%;
+    height: auto;
+  }
+  .cd-devices {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 4%;
+  }
+  .cd-device {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .cd-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-2);
+  }
+  .cd-item {
+    display: flex;
+    gap: 12px;
+    padding: var(--space-2);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    color: var(--accent);
+  }
+  .cd-item-label {
+    color: var(--text);
+    font-weight: 600;
+    font-size: 14.5px;
+  }
+  .cd-item-desc {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-top: 2px;
+  }
+  .cd-footnote {
+    margin-top: var(--space-3);
+    font-size: 13.5px;
+    color: var(--text-dim);
+    max-width: 640px;
+  }
+
+  @media (max-width: 767px) {
+    .cd-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

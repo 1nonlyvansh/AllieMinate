@@ -1,0 +1,74 @@
+---
+import providers from '../data/providers.json';
+---
+<section class="section" id="cloud-providers">
+  <div class="wrap">
+    <div class="section-label">Cloud Aggregation</div>
+    <h2 class="section-title">Six providers. One workspace.</h2>
+    <p class="section-intro">
+      Connect as many accounts as you want, from any of these — rename or remove any account
+      individually, and browse them combined or separately.
+    </p>
+
+    <div class="provider-grid" data-reveal-group>
+      {providers.map((p) => (
+        <div class="card provider-card reveal">
+          <img src={p.logo} alt={`${p.name} logo`} width="40" height="40" loading="lazy" />
+          <div class="provider-name">{p.name}</div>
+          <span class="badge">{p.auth}</span>
+        </div>
+      ))}
+    </div>
+
+    <p class="provider-note">
+      Multiple accounts per provider supported. Full connect-flow details in the
+      <a href="https://github.com/1nonlyvansh/AllieMinate/blob/main/docs/getting-started/cloud-accounts.md" target="_blank" rel="noopener">setup guide</a>.
+    </p>
+  </div>
+</section>
+
+<style>
+  .provider-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: var(--space-2);
+  }
+  .provider-card {
+    padding: var(--space-3) var(--space-2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+  }
+  .provider-card img {
+    border-radius: 10px;
+  }
+  .provider-name {
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .provider-note {
+    margin-top: var(--space-3);
+    font-size: 13.5px;
+    color: var(--text-dim);
+  }
+  .provider-note a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .provider-note a:hover {
+    text-decoration: underline;
+  }
+
+  @media (max-width: 1023px) {
+    .provider-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+  @media (max-width: 480px) {
+    .provider-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+</style>

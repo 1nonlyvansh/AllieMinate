@@ -1,0 +1,96 @@
+---
+const links = [
+  { label: 'Repository', href: 'https://github.com/1nonlyvansh/AllieMinate' },
+  { label: 'Releases', href: 'https://github.com/1nonlyvansh/AllieMinate/releases' },
+  { label: 'Changelog', href: 'https://github.com/1nonlyvansh/AllieMinate/blob/main/CHANGELOG.md' },
+  { label: 'Issues', href: 'https://github.com/1nonlyvansh/AllieMinate/issues' },
+  { label: 'Contributing', href: 'https://github.com/1nonlyvansh/AllieMinate/blob/main/CONTRIBUTING.md' },
+  { label: 'Security Policy', href: 'https://github.com/1nonlyvansh/AllieMinate/blob/main/SECURITY.md' },
+];
+---
+<section class="section" id="github">
+  <div class="wrap github-wrap">
+    <div class="card github-card reveal">
+      <div class="github-meta">
+        <span class="badge">v2.8.8</span>
+        <span class="badge">MIT License</span>
+      </div>
+      <h2 class="section-title">Open source. The whole thing.</h2>
+      <p>
+        Built by <a href="https://github.com/1nonlyvansh" target="_blank" rel="noopener">Vansh Kishore Sharma</a>.
+        Read the code, build it yourself, or send a PR.
+      </p>
+
+      <div class="github-links">
+        {links.map((l) => (
+          <a class="btn btn-secondary" href={l.href} target="_blank" rel="noopener">{l.label}</a>
+        ))}
+      </div>
+
+      <div class="dev-setup">
+        <div class="dev-setup-title">Developer setup, in short</div>
+        <pre><code>git clone https://github.com/1nonlyvansh/AllieMinate.git
+cd AllieMinate &amp;&amp; npm install
+cp .env.example .env
+bash apps/desktop/build/build-app.sh</code></pre>
+        <p>Requires Node.js 20+, Android Studio for the phone app, and macOS to build the .dmg.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .github-card {
+    padding: var(--space-6);
+  }
+  .github-meta {
+    display: flex;
+    gap: 8px;
+    margin-bottom: var(--space-2);
+  }
+  .github-card p {
+    color: var(--text-dim);
+    font-size: 15px;
+    max-width: 560px;
+    margin-top: var(--space-1);
+  }
+  .github-card a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .github-card p a:hover {
+    text-decoration: underline;
+  }
+  .github-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: var(--space-3);
+  }
+  .dev-setup {
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border);
+  }
+  .dev-setup-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+  .dev-setup pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    line-height: 1.7;
+  }
+  .dev-setup p {
+    font-size: 13px;
+    margin-top: 10px;
+  }
+</style>

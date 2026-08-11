@@ -77,6 +77,18 @@ jobs:
       - run: npm run build --workspace=@alliminate/desktop
       - run: npm run build:renderer --workspace=@alliminate/desktop
 
+  website-build:
+    name: Website build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build --workspace=@alliminate/website
+
   android-build:
     name: Android debug build
     runs-on: ubuntu-latest

@@ -1,0 +1,45 @@
+---
+import platforms from '../data/platforms.json';
+---
+<section class="section final-cta">
+  <div class="wrap">
+    <h2 class="final-tagline reveal">Your files. Your clouds. Your devices.</h2>
+    <div class="final-buttons reveal">
+      {platforms.map((p) => (
+        <a class="btn btn-primary" href={p.downloadHref}>{p.downloadLabel}</a>
+      ))}
+    </div>
+    <a class="final-secondary reveal" href="https://github.com/1nonlyvansh/AllieMinate" target="_blank" rel="noopener">View on GitHub</a>
+  </div>
+</section>
+
+<style>
+  .final-cta {
+    text-align: center;
+    padding-top: var(--space-10);
+    padding-bottom: var(--space-10);
+  }
+  .final-tagline {
+    font-size: clamp(26px, 3.6vw, 38px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: var(--space-3);
+  }
+  .final-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: var(--space-2);
+  }
+  .final-secondary {
+    display: inline-block;
+    margin-top: var(--space-1);
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 14px;
+  }
+  .final-secondary:hover {
+    text-decoration: underline;
+  }
+</style>

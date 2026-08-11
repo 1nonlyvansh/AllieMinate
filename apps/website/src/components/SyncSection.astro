@@ -1,0 +1,112 @@
+---
+const modes = [
+  { symbol: '↔', name: 'Two-way', desc: 'Changes propagate both directions. Conflicts: newest file wins, older side kept as a conflict copy.' },
+  { symbol: '↑', name: 'Backup-only', desc: 'Local changes push out. The destination is never written back to your local folder.' },
+  { symbol: '↓', name: 'Download-only', desc: 'The destination is the source of truth. Local edits are never pushed.' },
+];
+const details = [
+  'User-editable ignore-pattern rules',
+  'Real bandwidth throttling',
+  'Storage quota warnings',
+  'Live per-pair progress and file counts',
+  'Pause/resume, independent of disabling a pair',
+  'Sync Trash — soft-delete, both directions',
+  'Deleting a Sync Pair requires explicit confirmation + device authentication',
+];
+---
+<section class="section" id="sync">
+  <div class="wrap">
+    <div class="section-label">Sync Engine</div>
+    <h2 class="section-title">Sync Pairs, on your terms.</h2>
+    <p class="section-intro">
+      Keep any local folder in sync against a cloud account or a paired device. Direction is
+      explicit and per-pair, not a black box.
+    </p>
+
+    <div class="mode-grid" data-reveal-group>
+      {modes.map((m) => (
+        <div class="card mode-card reveal">
+          <div class="mode-symbol">{m.symbol}</div>
+          <h3>{m.name}</h3>
+          <p>{m.desc}</p>
+        </div>
+      ))}
+    </div>
+
+    <div class="card universal-card reveal">
+      <span class="badge">Universal Sync Folder</span>
+      <p>One cloud login, one host folder, broadcast to every device you grant it to at once — instead of wiring up a separate Sync Pair for each one.</p>
+    </div>
+
+    <ul class="detail-list reveal">
+      {details.map((d) => <li>{d}</li>)}
+    </ul>
+  </div>
+</section>
+
+<style>
+  .mode-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+  .mode-card {
+    padding: var(--space-3);
+  }
+  .mode-symbol {
+    font-size: 28px;
+    color: var(--accent);
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .mode-card h3 {
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+  .mode-card p {
+    color: var(--text-dim);
+    font-size: 13.5px;
+    line-height: 1.55;
+  }
+  .universal-card {
+    padding: var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+  .universal-card p {
+    margin-top: 8px;
+    color: var(--text-dim);
+    font-size: 14.5px;
+  }
+  .detail-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 24px;
+  }
+  .detail-list li {
+    font-size: 14px;
+    color: var(--text-secondary);
+    padding-left: 20px;
+    position: relative;
+  }
+  .detail-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 9px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  @media (max-width: 767px) {
+    .mode-grid,
+    .detail-list {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

@@ -1,0 +1,21 @@
+---
+interface Props {
+  size?: number;
+  class?: string;
+}
+const { size = 70, class: className = '' } = Astro.props;
+---
+<svg
+  class={className}
+  width={size}
+  height={size * 1.7}
+  viewBox="0 0 100 172"
+  fill="none"
+  xmlns="http://www.w3.org/2000/svg"
+  role="img"
+  aria-label="Android phone"
+>
+  <rect x="6" y="4" width="88" height="164" rx="16" stroke="currentColor" stroke-width="3.4"/>
+  <rect x="14" y="20" width="72" height="132" fill="currentColor" fill-opacity="0.08"/>
+  <circle cx="50" cy="162" r="3.5" fill="currentColor"/>
+</svg>

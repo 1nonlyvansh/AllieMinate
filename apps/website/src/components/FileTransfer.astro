@@ -1,0 +1,94 @@
+---
+import Icon from './Icon.astro';
+---
+<section class="section" id="file-transfer">
+  <div class="wrap">
+    <div class="section-label">How transfers actually route</div>
+    <h2 class="section-title">Two paths, chosen by what you're syncing against.</h2>
+
+    <div class="ft-grid" data-reveal-group>
+      <div class="card ft-card reveal">
+        <div class="ft-flow">
+          <span class="ft-node"><Icon name="devices" size={20} /> Device A</span>
+          <span class="ft-arrow">→</span>
+          <span class="ft-node ft-node-accent"><Icon name="cloud" size={20} /> Cloud provider</span>
+          <span class="ft-arrow">→</span>
+          <span class="ft-node"><Icon name="devices" size={20} /> Device B</span>
+        </div>
+        <h3>Cloud-mediated</h3>
+        <p>Sync Pairs targeting a cloud account go through that provider's own API — the same as using the provider's own app or website.</p>
+      </div>
+
+      <div class="card ft-card reveal">
+        <div class="ft-flow">
+          <span class="ft-node"><Icon name="devices" size={20} /> Device A</span>
+          <span class="ft-arrow ft-arrow-both">↔</span>
+          <span class="ft-node"><Icon name="devices" size={20} /> Device B</span>
+        </div>
+        <h3>Direct LAN</h3>
+        <p>Sync Pairs targeting a device, Nearby Share, and Universal Clipboard go straight between your two devices — never through a cloud provider.</p>
+      </div>
+    </div>
+
+    <p class="ft-callout reveal">Cloud sync uses provider APIs. Device-to-device never leaves your network.</p>
+  </div>
+</section>
+
+<style>
+  .ft-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-3);
+  }
+  .ft-card {
+    padding: var(--space-4);
+  }
+  .ft-flow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    color: var(--accent);
+    font-size: 13.5px;
+    font-weight: 600;
+    margin-bottom: var(--space-3);
+  }
+  .ft-node {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    border-radius: 999px;
+  }
+  .ft-node-accent {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .ft-arrow {
+    color: var(--text-dim);
+  }
+  .ft-card h3 {
+    font-size: 17px;
+    margin-bottom: 6px;
+  }
+  .ft-card p {
+    color: var(--text-dim);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .ft-callout {
+    text-align: center;
+    margin-top: var(--space-4);
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  @media (max-width: 767px) {
+    .ft-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

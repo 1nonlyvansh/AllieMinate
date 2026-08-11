@@ -1,0 +1,8 @@
+[
+  { "id": "google-drive", "name": "Google Drive", "logo": "/images/providers/google-drive.png", "auth": "OAuth", "multiAccount": true },
+  { "id": "onedrive", "name": "OneDrive", "logo": "/images/providers/onedrive.png", "auth": "OAuth", "multiAccount": true },
+  { "id": "backblaze-b2", "name": "Backblaze B2", "logo": "/images/providers/backblaze-b2.png", "auth": "API key pair", "multiAccount": true },
+  { "id": "idrive-e2", "name": "IDrive e2", "logo": "/images/providers/idrive-e2.png", "auth": "API key pair (S3-compatible)", "multiAccount": true },
+  { "id": "pcloud", "name": "pCloud", "logo": "/images/providers/pcloud.png", "auth": "OAuth", "multiAccount": true },
+  { "id": "mega", "name": "MEGA", "logo": "/images/providers/mega.png", "auth": "Email + password", "multiAccount": true }
+]

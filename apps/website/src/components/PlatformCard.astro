@@ -1,0 +1,109 @@
+---
+import MacDevice from './devices/MacDevice.astro';
+import WindowsDevice from './devices/WindowsDevice.astro';
+import AndroidDevice from './devices/AndroidDevice.astro';
+
+interface Platform {
+  id: string;
+  name: string;
+  badge: string;
+  device: string;
+  capabilities: string[];
+  downloadLabel: string;
+  downloadHref: string;
+  installNote: string;
+  guideHref: string;
+}
+
+interface Props {
+  platform: Platform;
+  compact?: boolean;
+}
+const { platform, compact = false } = Astro.props;
+
+const DeviceIllustration = { mac: MacDevice, windows: WindowsDevice, android: AndroidDevice }[platform.device];
+---
+<div class="card platform-card reveal" data-platform-choice={platform.id}>
+  <div class="platform-visual" aria-hidden="true">
+    <DeviceIllustration size={platform.device === 'android' ? 56 : 96} />
+  </div>
+  <h3>{platform.name}</h3>
+  <span class="badge">{platform.badge}</span>
+
+  {!compact && (
+    <ul class="platform-caps">
+      {platform.capabilities.map((c: string) => <li>{c}</li>)}
+    </ul>
+  )}
+
+  <a class="btn btn-primary btn-block" href={platform.downloadHref}>{platform.downloadLabel}</a>
+  <a class="platform-guide" href={platform.guideHref} target="_blank" rel="noopener">Installation guide →</a>
+  <p class="platform-note">{platform.installNote}</p>
+</div>
+
+<style>
+  .platform-card {
+    padding: var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: transform 0.2s var(--ease-out), border-color 0.2s var(--ease-out);
+  }
+  .platform-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+  }
+  .platform-visual {
+    color: var(--text-dim);
+    display: flex;
+    justify-content: center;
+    padding: var(--space-2) 0;
+  }
+  .platform-card h3 {
+    font-size: 19px;
+    text-align: center;
+  }
+  .platform-card .badge {
+    align-self: center;
+  }
+  .platform-caps {
+    list-style: none;
+    margin: var(--space-2) 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .platform-caps li {
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    padding-left: 16px;
+    position: relative;
+    line-height: 1.5;
+  }
+  .platform-caps li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 7px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .platform-guide {
+    text-align: center;
+    font-size: 13px;
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .platform-guide:hover {
+    text-decoration: underline;
+  }
+  .platform-note {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin-top: 4px;
+  }
+</style>

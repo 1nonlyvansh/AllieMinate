@@ -27,6 +27,7 @@ jobs:
       - run: npm run build --workspace=@alliminate/backend
       - run: npm run build --workspace=@alliminate/desktop
       - run: npm run build:renderer --workspace=@alliminate/desktop
+      - run: npm run build --workspace=@alliminate/website
 
   draft-release:
     name: Draft GitHub Release from CHANGELOG

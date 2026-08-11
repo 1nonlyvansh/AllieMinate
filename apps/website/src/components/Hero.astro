@@ -1,0 +1,142 @@
+---
+import MacDevice from './devices/MacDevice.astro';
+import WindowsDevice from './devices/WindowsDevice.astro';
+import AndroidDevice from './devices/AndroidDevice.astro';
+---
+<section class="hero">
+  <div class="wrap hero-inner">
+    <div class="hero-copy">
+      <img src="/images/logo.svg" alt="AllieMinate" width="72" height="72" class="hero-logo float" />
+      <h1 class="hero-title">One workspace for every cloud you own, and every device you carry.</h1>
+      <p class="hero-sub">
+        Google Drive, OneDrive, Backblaze B2, IDrive e2, MEGA, and pCloud — unified on your Mac,
+        Windows PC, and Android phone, with nothing routed through anyone's server but the
+        providers themselves.
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#download" data-primary-download>Download</a>
+        <a class="btn btn-secondary" href="#product">Explore features</a>
+      </div>
+      <div class="hero-badges">
+        <span class="badge">macOS</span>
+        <span class="badge">Windows</span>
+        <span class="badge">Android</span>
+      </div>
+    </div>
+
+    <div class="hero-visual" aria-hidden="true">
+      <svg class="hero-arcs" viewBox="0 0 360 240" fill="none">
+        <path class="connection-path" style="--dash:200" d="M90 70 C 130 110, 230 110, 270 70" stroke="#00e5ff" stroke-opacity="0.5" stroke-width="2" />
+        <path class="connection-path" style="--dash:200" d="M100 140 C 140 100, 220 100, 260 140" stroke="#00e5ff" stroke-opacity="0.5" stroke-width="2" />
+      </svg>
+      <div class="hero-devices">
+        <div class="hero-device hero-device-mac"><MacDevice size={130} /></div>
+        <div class="hero-device hero-device-windows"><WindowsDevice size={130} /></div>
+        <div class="hero-device hero-device-android"><AndroidDevice size={58} /></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .hero {
+    padding: 148px 0 var(--space-8);
+    min-height: 92vh;
+    display: flex;
+    align-items: center;
+  }
+  .hero-inner {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: var(--space-6);
+    align-items: center;
+  }
+  .hero-logo {
+    margin-bottom: var(--space-2);
+  }
+  .hero-title {
+    font-size: clamp(32px, 4.6vw, 52px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  .hero-sub {
+    margin-top: var(--space-2);
+    font-size: 17px;
+    color: var(--text-dim);
+    max-width: 560px;
+    line-height: 1.65;
+  }
+  .hero-cta {
+    display: flex;
+    gap: 12px;
+    margin-top: var(--space-3);
+    flex-wrap: wrap;
+  }
+  .hero-badges {
+    display: flex;
+    gap: 8px;
+    margin-top: var(--space-3);
+  }
+  .hero-visual {
+    position: relative;
+    color: var(--accent);
+  }
+  .hero-arcs {
+    width: 100%;
+    height: auto;
+  }
+  .hero-devices {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .hero-device {
+    position: absolute;
+    color: var(--text-dim);
+  }
+  .hero-device-mac {
+    left: 6%;
+    top: 20%;
+  }
+  .hero-device-windows {
+    right: 4%;
+    top: 20%;
+  }
+  .hero-device-android {
+    left: 50%;
+    bottom: 4%;
+    transform: translateX(-50%);
+  }
+
+  @media (max-width: 1023px) {
+    .hero-inner {
+      grid-template-columns: 1fr;
+    }
+    .hero-visual {
+      order: -1;
+      max-width: 420px;
+      margin: 0 auto;
+    }
+    .hero {
+      padding-top: 120px;
+      text-align: center;
+    }
+    .hero-cta,
+    .hero-badges {
+      justify-content: center;
+    }
+    .hero-sub {
+      margin-left: auto;
+      margin-right: auto;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .hero-visual {
+      display: none;
+    }
+  }
+</style>
