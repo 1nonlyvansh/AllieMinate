@@ -9,5 +9,5 @@ and download links — come here for step-by-step setup and the details behind h
 - **[troubleshooting/](troubleshooting/)** — common problems and known non-functional UI.
 - **[architecture/](architecture/)** — system design, data flow, security model, build/release process.
 
-All of this describes AllieMinate **v2.8.8**. See [../CHANGELOG.md](../CHANGELOG.md) for what changed
+All of this describes AllieMinate **v2.8.9**. See [../CHANGELOG.md](../CHANGELOG.md) for what changed
 between releases.

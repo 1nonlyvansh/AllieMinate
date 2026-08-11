@@ -8,6 +8,8 @@ dist/
 .env
 .env.local
 !.env.example
+apps/backend/.oauth-defaults.env
+!apps/backend/.oauth-defaults.env.example
 
 # --- Backend runtime state — written at runtime into apps/backend/ by default (ALLIMINATE_DATA_DIR
 # overrides this), never source. Includes paired-device tokens, OAuth account records, and connection

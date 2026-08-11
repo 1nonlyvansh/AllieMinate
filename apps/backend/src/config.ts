@@ -30,6 +30,23 @@ export interface GoogleDriveConfig {
   refreshToken: string;
 }
 
+// AllieMinate's own Google Cloud OAuth client (Desktop app type — Google treats this secret as a
+// public identifier, not a confidential one, for installed apps: https://developers.google.com/identity/protocols/oauth2/native-app).
+// Lets "Add Google Account" work out of the box with no per-user Google Cloud project setup.
+// The actual values are NEVER committed — GitHub's push protection rejects a plaintext OAuth client
+// secret outright regardless of Google's own "not truly confidential for installed apps" stance, since
+// a public repo is a far easier scrape target than a compiled binary. build-app.sh's pristine-bundle
+// stage injects these two lines into the DISTRIBUTED .env (the one shipped in the .dmg/.exe), sourced
+// from a gitignored local secrets file — see apps/backend/.oauth-defaults.env.example for the shape.
+// A user's own GOOGLE_DRIVE_CLIENT_ID/_SECRET in their personal .env still overrides this if set.
+export function googleDriveClientId(): string | undefined {
+  return process.env.GOOGLE_DRIVE_CLIENT_ID;
+}
+
+export function googleDriveClientSecret(): string | undefined {
+  return process.env.GOOGLE_DRIVE_CLIENT_SECRET;
+}
+
 export interface MegaConfig {
   email: string;
   password: string;
@@ -47,8 +64,8 @@ export interface OneDriveConfig {
 }
 
 function readGoogleDriveConfig(): GoogleDriveConfig | null {
-  const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
+  const clientId = googleDriveClientId();
+  const clientSecret = googleDriveClientSecret();
   const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
   if (!clientId || !clientSecret || !refreshToken) return null;
   return { clientId, clientSecret, refreshToken };

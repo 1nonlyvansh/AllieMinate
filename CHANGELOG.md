@@ -5,6 +5,31 @@ All notable changes to AllieMinate are documented here. Format loosely follows
 project's real commit history (`git log`), not invented — see each release's tag on GitHub for the
 exact diff.
 
+## [v2.8.9] — 2026-08-11
+
+### Added
+- **Google Drive OAuth now works out of the box.** "Add Google Account" no longer requires setting up
+  your own Google Cloud project — AllieMinate ships its own registered OAuth client, so a fresh
+  install can connect a Drive account with just a browser sign-in.
+- Real website at **[allieminate.app](https://allieminate.app)** — domain verified in Google Search
+  Console, used as the authorized domain/homepage/privacy-policy for the Google OAuth consent screen.
+
+### Fixed
+- Freshly-paired phone showing Online to the phone but Offline on the desktop (and unable to receive
+  Send-to-Device transfers) — the desktop now trusts the actual incoming connection's source IP over
+  a peer's self-reported (sometimes wrong) LAN address at pairing and re-announce time.
+- Duplicate Google Drive account entries (same account linked twice under two different internal IDs)
+  inflating the Settings storage total — `accounts.json` now self-heals by de-duplicating on email
+  every time it's loaded, not just at link time.
+- Files view's "All Clouds" filter showing the generic "Google Drive" label for every account instead
+  of its custom name/email, even after renaming in Settings (an inverted guard skipped the label fetch
+  on the main Files view specifically).
+- A Google Drive account with a dead/expired refresh token silently looked fully connected in
+  Settings (a stale cached storage number kept being served) while every real upload/listing for it
+  failed — now surfaces a clear "Access expired — reconnect this account in Settings" state instead.
+- Android's UDP discovery beacon hardened against OEM Wi-Fi power-management (OxygenOS and similar)
+  silently dropping broadcast frames to a backgrounded app — now holds a proper multicast lock.
+
 ## [v2.8.8] — 2026-08-11
 
 Current release. Installers: macOS `.dmg`, Windows `.exe`, Android `.apk` —

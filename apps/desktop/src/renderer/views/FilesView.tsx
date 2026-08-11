@@ -141,7 +141,6 @@ export function FilesView({
   const [progress, setProgress] = useState<{ label: string; done: number; total: number } | null>(null);
 
   useEffect(() => {
-    if (!category) return;
     fetch(`${API_BASE}/accounts`)
       .then((res) => res.json())
       .then((data) => {
@@ -150,7 +149,7 @@ export function FilesView({
         setAccountLabels(map);
       })
       .catch(() => {});
-  }, [category]);
+  }, []);
 
   useEffect(() => {
     fetch(`${API_BASE}/open-with`)

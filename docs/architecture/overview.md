@@ -20,7 +20,7 @@ onto it (same-machine HTTP + a WebSocket for live events); the phone talks to a 
 backend directly over the LAN once paired, and separately runs its own tiny local HTTP server so the
 reverse direction (desktop browsing the phone) works too.
 
-## No central relay server — still accurate as of v2.8.8
+## No central relay server — still accurate as of v2.8.9
 
 Every cloud call (Google Drive, OneDrive, B2, IDrive e2, MEGA, pCloud) goes straight from the backend
 running on your machine to that provider's own API, using OAuth/API credentials you supplied. Every

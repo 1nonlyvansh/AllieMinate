@@ -14,7 +14,24 @@ export interface DriveAccount {
 
 export function loadDriveAccounts(): DriveAccount[] {
   if (!fs.existsSync(ACCOUNTS_PATH)) return [];
-  return JSON.parse(fs.readFileSync(ACCOUNTS_PATH, 'utf-8'));
+  const accounts: DriveAccount[] = JSON.parse(fs.readFileSync(ACCOUNTS_PATH, 'utf-8'));
+
+  // The add-account flow's own dedupe check (providers.ts) only runs at link time and can be bypassed by a
+  // transient userinfo lookup failure or a double-fired OAuth callback — either leaves a second accounts.json
+  // row for the same real Google account. Nothing downstream (storage totals, the Files filter, Settings)
+  // ever re-checks, so a slipped-through duplicate is permanent and shows up everywhere. Self-heal on every
+  // load: keep the first occurrence of each non-empty email, drop the rest, and persist the cleaned list so
+  // this doesn't need to re-run the same dedupe logic in every caller.
+  const seenEmails = new Set<string>();
+  const deduped = accounts.filter((a) => {
+    if (!a.email) return true;
+    if (seenEmails.has(a.email)) return false;
+    seenEmails.add(a.email);
+    return true;
+  });
+  if (deduped.length !== accounts.length) saveDriveAccounts(deduped);
+
+  return deduped;
 }
 
 export function saveDriveAccounts(accounts: DriveAccount[]): void {

@@ -15,13 +15,13 @@
 
 ---
 
-[![Version](https://img.shields.io/badge/Version-v2.8.8-00e5ff?style=flat-square&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/releases/tag/v2.8.8)
+[![Version](https://img.shields.io/badge/Version-v2.8.9-00e5ff?style=flat-square&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/releases/tag/v2.8.9)
 [![License: MIT](https://img.shields.io/badge/License-MIT-00e5ff?style=flat-square&labelColor=050d1a)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Android-0d2a3a?style=flat-square&labelColor=050d1a)](#supported-platforms)
 [![CI](https://img.shields.io/github/actions/workflow/status/1nonlyvansh/AllieMinate/ci.yml?branch=main&style=flat-square&label=CI&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/Status-Active%20Dev-1db954?style=flat-square&labelColor=050d1a)](CHANGELOG.md)
 
-[Website](https://allieminate.vercel.app/) · [Download](https://github.com/1nonlyvansh/AllieMinate/releases/latest) · [Changelog](CHANGELOG.md) · [Docs](docs/) · [Report a Bug](https://github.com/1nonlyvansh/AllieMinate/issues/new?template=bug_report.md)
+[Website](https://allieminate.app/) · [Download](https://github.com/1nonlyvansh/AllieMinate/releases/latest) · [Changelog](CHANGELOG.md) · [Docs](docs/) · [Report a Bug](https://github.com/1nonlyvansh/AllieMinate/issues/new?template=bug_report.md)
 
 </div>
 
@@ -108,7 +108,7 @@ None of the three installers are code-signed with a paid certificate yet — see
 [![Download EXE](https://img.shields.io/badge/Windows-Download%20.exe-00e5ff?style=for-the-badge&logo=windows&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/releases/latest)
 [![Download APK](https://img.shields.io/badge/Android-Download%20.apk-00e5ff?style=for-the-badge&logo=android&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/releases/latest)
 
-All installers are published on [GitHub Releases](https://github.com/1nonlyvansh/AllieMinate/releases) — the current version is **v2.8.8**. Verify your download's integrity against the SHA-256 checksum published with each release (see [docs/architecture/build-and-release.md](docs/architecture/build-and-release.md#generating-checksums)).
+All installers are published on [GitHub Releases](https://github.com/1nonlyvansh/AllieMinate/releases) — the current version is **v2.8.9**. Verify your download's integrity against the SHA-256 checksum published with each release (see [docs/architecture/build-and-release.md](docs/architecture/build-and-release.md#generating-checksums)).
 
 ---
 
@@ -479,16 +479,28 @@ Full version history: **[CHANGELOG.md](CHANGELOG.md)**. Installers: **[GitHub Re
 
 ## Support / contact
 
-**Vansh Kishore Sharma** — [GitHub](https://github.com/1nonlyvansh) · [Instagram](https://instagram.com/1nonlyvansh) · [LinkedIn](https://www.linkedin.com/in/vanshkishore/)
-
-Bug or feature request → [open an issue](https://github.com/1nonlyvansh/AllieMinate/issues/new/choose). Security issue → [SECURITY.md](SECURITY.md) (do not open a public issue). Anything else → [vansh080605@gmail.com](mailto:vansh080605@gmail.com) · [WhatsApp +91 91361 58580](https://wa.me/919136158580).
+Bug or feature request → [open an issue](https://github.com/1nonlyvansh/AllieMinate/issues/new/choose). Security issue → [SECURITY.md](SECURITY.md) (do not open a public issue). Anything else, reach the developer directly below.
 
 ---
 
 <div align="center">
 
-**AllieMinate v2.8.8** — cross-platform cloud aggregation · self-healing device pairing · zero-relay sync
+**AllieMinate v2.8.9** — cross-platform cloud aggregation · self-healing device pairing · zero-relay sync
 
 *A space with you.*
+
+<br>
+
+**Vansh Kishore Sharma**
+
+[![GitHub](https://img.shields.io/badge/GitHub-1nonlyvansh-00e5ff?style=flat-square&logo=github&logoColor=00e5ff&labelColor=050d1a)](https://github.com/1nonlyvansh)
+&nbsp;
+[![Instagram](https://img.shields.io/badge/Instagram-%401nonlyvansh-00e5ff?style=flat-square&logo=instagram&logoColor=00e5ff&labelColor=050d1a)](https://instagram.com/1nonlyvansh)
+&nbsp;
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-vanshkishore-00e5ff?style=flat-square&logo=linkedin&logoColor=00e5ff&labelColor=050d1a)](https://www.linkedin.com/in/vanshkishore/)
+&nbsp;
+[![Email](https://img.shields.io/badge/Email-vansh080605%40gmail.com-00e5ff?style=flat-square&logo=gmail&logoColor=00e5ff&labelColor=050d1a)](mailto:vansh080605@gmail.com)
+&nbsp;
+[![WhatsApp](https://img.shields.io/badge/WhatsApp-%2B91%2091361%2058580-00e5ff?style=flat-square&logo=whatsapp&logoColor=00e5ff&labelColor=050d1a)](https://wa.me/919136158580)
 
 </div>

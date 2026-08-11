@@ -207,11 +207,17 @@ async function refreshProviderStorage(
     const message = err instanceof Error ? err.message : String(err);
     console.error(`storage usage lookup failed for ${accountId}:`, message);
     storageFailedAt.set(accountId, Date.now());
+    // invalid_grant means the refresh token is dead and this account will NEVER succeed again without the
+    // user reconnecting it — unlike a transient network hiccup, there's no reason to keep serving a
+    // once-real cached number forever (that's exactly what made an expired account look perfectly healthy
+    // in Settings while every real Drive call for it 400'd). Drop the stale cache so the error entry below
+    // actually surfaces instead of getting shadowed by the `if (cached)` fallback.
+    if (message.includes('invalid_grant')) storageCache.delete(accountId);
     const cached = storageCache.get(accountId);
-    if (cached) return cached; // had a real number before — keep showing it rather than an error card
-    // never succeeded even once (most commonly a revoked/expired OAuth grant — "invalid_grant") — show
-    // the account with a clear reconnect message instead of silently dropping it from the list, which is
-    // what returning null here used to do (get filtered out of /storage's response entirely).
+    if (cached) return cached; // had a real number before, and this failure looks transient — keep showing it
+    // never succeeded even once, or just went permanently dead (revoked/expired OAuth grant —
+    // "invalid_grant") — show the account with a clear reconnect message instead of silently dropping it
+    // from the list, which is what returning null here used to do (filtered out of /storage's response).
     const friendly = message.includes('invalid_grant')
       ? 'Access expired — reconnect this account in Settings'
       : "Couldn't reach this account — reconnect it in Settings if this keeps happening";

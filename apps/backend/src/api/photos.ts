@@ -11,6 +11,7 @@ import { getDeviceIdentity } from '../device';
 import { logTransfer } from '../transferHistory';
 import { getNearbyPeers } from '../nearbyDiscovery';
 import { sendBytesToNearbyPeer } from '../nearbyTransfer';
+import { googleDriveClientId, googleDriveClientSecret } from '../config';
 
 const PHOTOS_OAUTH_PORT = 53687;
 // Google retired broad mediaItems.list/search access for third-party apps on 2025-03-31 — the only way
@@ -68,8 +69,8 @@ async function getAccessToken(accountId: string, refreshToken: string, clientId:
 async function fetchPhotoBytes(accountId: string, baseUrl: string): Promise<Buffer> {
   const account = loadPhotosAccounts().find((a) => a.accountId === accountId);
   if (!account) throw new Error('account not found');
-  const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
+  const clientId = googleDriveClientId();
+  const clientSecret = googleDriveClientSecret();
   if (!clientId || !clientSecret) throw new Error('missing GOOGLE_DRIVE_CLIENT_ID/SECRET in .env');
 
   const token = await getAccessToken(account.accountId, account.refreshToken, clientId, clientSecret);
@@ -79,8 +80,8 @@ async function fetchPhotoBytes(accountId: string, baseUrl: string): Promise<Buff
 }
 
 function requireGoogleCreds(reply: any): { clientId: string; clientSecret: string } | null {
-  const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
+  const clientId = googleDriveClientId();
+  const clientSecret = googleDriveClientSecret();
   if (!clientId || !clientSecret) {
     reply.code(400).send({ error: 'missing GOOGLE_DRIVE_CLIENT_ID/SECRET in .env' });
     return null;
@@ -354,8 +355,8 @@ export function registerPhotosRoutes(app: FastifyInstance): void {
     }
     if (photosTimeout) clearTimeout(photosTimeout);
 
-    const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
+    const clientId = googleDriveClientId();
+    const clientSecret = googleDriveClientSecret();
     if (!clientId || !clientSecret) {
       return reply.code(400).send({ error: 'missing GOOGLE_DRIVE_CLIENT_ID/SECRET in .env — set those up first' });
     }

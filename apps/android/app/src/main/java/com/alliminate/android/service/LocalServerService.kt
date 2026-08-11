@@ -43,8 +43,8 @@ class LocalServerService : Service() {
             // Nearby Share needs to be discoverable even before/without any pairing, so its beacon rides
             // this service's lifecycle directly rather than being gated on Prefs.isPaired the way the rest
             // of this service historically has been.
-            NearbyBeacon.start()
-            NearbyBeacon.startListening()
+            NearbyBeacon.start(applicationContext)
+            NearbyBeacon.startListening(applicationContext)
             SyncFileObservers.start(applicationContext)
             com.alliminate.android.data.UniversalClipboard.start(applicationContext)
             // battery-optimization exemption only keeps the CPU/process alive under Doze — it says nothing

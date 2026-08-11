@@ -111,6 +111,17 @@ cp "$DESKTOP/build/AllieMinate.icns" "$APP_RES/AllieMinate.icns"
 # path is exactly this: cp .env.example .env, fill in only what you want).
 cp "$ROOT/.env.example" "$BUILD_APP/Contents/.env"
 
+# ...except the app's OWN Google OAuth client identity, so a downloaded .dmg's "Add Google Account"
+# works with no per-user Google Cloud setup, without that credential ever being committed to git
+# (GitHub's push protection rejects a plaintext OAuth client secret outright). Sourced from a gitignored
+# local file — see apps/backend/.oauth-defaults.env.example for the shape. If that file doesn't exist
+# (e.g. a fresh clone with no secrets configured yet), the build just proceeds without it — Drive OAuth
+# falls back to needing the user's own GOOGLE_DRIVE_CLIENT_ID/SECRET in their personal .env, same as
+# every other provider already works today.
+if [ -f "$ROOT/apps/backend/.oauth-defaults.env" ]; then
+  cat "$ROOT/apps/backend/.oauth-defaults.env" >> "$BUILD_APP/Contents/.env"
+fi
+
 echo "== building macOS Share Extensions =="
 bash "$DESKTOP/macos-share-extension/build.sh" "$BUILD_APP/Contents/PlugIns"
 

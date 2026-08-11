@@ -3,7 +3,7 @@
 ## Supported versions
 
 AllieMinate is a single-maintainer, actively-developed project. Only the **latest released
-version** (currently v2.8.8 — see [CHANGELOG.md](CHANGELOG.md)) receives security fixes. There is
+version** (currently v2.8.9 — see [CHANGELOG.md](CHANGELOG.md)) receives security fixes. There is
 no long-term support branch and no backporting of fixes to older releases.
 
 ## Reporting a vulnerability

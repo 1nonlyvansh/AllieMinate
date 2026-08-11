@@ -15,8 +15,8 @@ const {
   path = '/',
 } = Astro.props;
 
-const canonical = new URL(path, 'https://allieminate.vercel.app').toString();
-const ogImage = new URL('/images/og-hero.png', 'https://allieminate.vercel.app').toString();
+const canonical = new URL(path, 'https://allieminate.app').toString();
+const ogImage = new URL('/images/og-hero.png', 'https://allieminate.app').toString();
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -29,7 +29,7 @@ const jsonLd = {
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
   author: { '@type': 'Person', name: 'Vansh Kishore Sharma', url: 'https://github.com/1nonlyvansh' },
   license: 'https://github.com/1nonlyvansh/AllieMinate/blob/main/LICENSE',
-  url: 'https://allieminate.vercel.app/',
+  url: 'https://allieminate.app/',
   downloadUrl: 'https://github.com/1nonlyvansh/AllieMinate/releases/latest',
 };
 ---

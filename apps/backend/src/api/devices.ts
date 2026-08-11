@@ -34,6 +34,23 @@ function basename(key: string): string {
 }
 
 const PING_TIMEOUT_MS = 4000;
+const ANDROID_DEFAULT_PORT = 4311;
+
+// A peer's self-reported host (from LocalNetwork.lanAddress()-style interface enumeration on Android, or
+// equivalent) is a best-effort guess — wrong interface picked, DHCP not settled yet, VPN/hotspot present,
+// etc — and once wrong it's wrong forever (nothing re-validates it). But whatever request just carried that
+// claim (/pair/verify, /devices/self/host) necessarily arrived from the peer's REAL reachable address —
+// Fastify's request.ip is that address, straight off the socket, guaranteed correct at this exact moment.
+// Prefer it over the self-reported value whenever it's a plausible LAN address, keeping only the port from
+// the claim (the connection's source port is ephemeral, not the peer's listening port).
+function reconcileHost(claimedHost: string, connIp: string | undefined): string {
+  if (!connIp) return claimedHost;
+  const normalized = connIp.replace(/^::ffff:/, '');
+  if (normalized === '127.0.0.1' || normalized === '::1' || normalized === 'localhost') return claimedHost;
+  if (claimedHost.startsWith('localhost:') || claimedHost.startsWith('127.0.0.1:')) return claimedHost; // USB tunnel, intentional
+  const port = claimedHost.split(':')[1] || String(ANDROID_DEFAULT_PORT);
+  return `${normalized}:${port}`;
+}
 
 async function testConnection(
   host: string,
@@ -355,8 +372,9 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
       }
 
       const token = crypto.randomUUID();
+      const host = reconcileHost(requester.host, req.ip);
       const devices = loadPairedDevices().filter((d) => d.id !== requester.id);
-      devices.push({ ...requester, token, pairedAt: new Date().toISOString() });
+      devices.push({ ...requester, host, token, pairedAt: new Date().toISOString() });
       savePairedDevices(devices);
 
       const me = getDeviceIdentity();
@@ -409,8 +427,9 @@ export function registerDeviceRoutes(app: FastifyInstance, backends: Map<string,
     const device = token ? findByToken(token) : undefined;
     if (!device) return reply.code(401).send({ error: 'unauthorized' });
 
-    const newHost = req.body.host?.trim();
-    if (!newHost) return reply.code(400).send({ error: 'missing host' });
+    const claimedHost = req.body.host?.trim();
+    if (!claimedHost) return reply.code(400).send({ error: 'missing host' });
+    const newHost = reconcileHost(claimedHost, req.ip);
     if (newHost === device.host) return { ok: true, changed: false };
 
     const devices = loadPairedDevices();

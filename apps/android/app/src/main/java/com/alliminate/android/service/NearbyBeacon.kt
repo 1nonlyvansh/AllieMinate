@@ -1,5 +1,7 @@
 package com.alliminate.android.service
 
+import android.content.Context
+import android.net.wifi.WifiManager
 import com.alliminate.android.data.Prefs
 import org.json.JSONObject
 import java.net.DatagramPacket
@@ -19,6 +21,7 @@ private const val LISTEN_SOCKET_TIMEOUT_MS = 2000
 object NearbyBeacon {
     private var sendThread: Thread? = null
     private var listenThread: Thread? = null
+    private var multicastLock: WifiManager.MulticastLock? = null
 
     @Volatile
     private var running = false
@@ -26,9 +29,29 @@ object NearbyBeacon {
     @Volatile
     private var listening = false
 
-    fun start() {
+    // A high-perf WifiLock (LocalServerService) keeps the radio itself out of power-save, but that's a
+    // separate mechanism from Android's multicast/broadcast filter — many OEM ROMs (OxygenOS included, per
+    // a real report of the Mac showing a freshly-paired OnePlus phone as permanently Offline) silently drop
+    // incoming broadcast frames to a backgrounded app's socket regardless of radio state unless this lock is
+    // held, with zero error surfaced on either side — the beacon just never arrives. Reference-counted so
+    // start()+startListening() sharing one lock don't fight each other on acquire/release order.
+    private fun acquireMulticastLock(context: Context) {
+        if (multicastLock != null) return
+        val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+        multicastLock = wifiManager?.createMulticastLock("AllieMinate:nearbyBeacon")?.apply {
+            setReferenceCounted(true)
+            runCatching { acquire() }
+        }
+    }
+
+    private fun releaseMulticastLock() {
+        multicastLock?.let { if (it.isHeld) runCatching { it.release() } }
+    }
+
+    fun start(context: Context) {
         if (running) return
         running = true
+        acquireMulticastLock(context)
         sendThread = Thread {
             val socket = runCatching { DatagramSocket().apply { broadcast = true } }.getOrNull()
             if (socket == null) {
@@ -64,6 +87,7 @@ object NearbyBeacon {
     fun stop() {
         running = false
         sendThread = null
+        if (!listening) releaseMulticastLock()
     }
 
     /** Hears a paired PC's own periodic beacon (nearbyDiscovery.ts's setInterval broadcast — needs Nearby
@@ -71,9 +95,10 @@ object NearbyBeacon {
      * paired master's stale host the moment the phone lands on a new network it's also reachable on —
      * mirrors the desktop backend's isOnline() fallback (devices.ts) that does the same thing in reverse.
      * Independent of the send loop: runs whenever paired, regardless of this phone's own discoverability. */
-    fun startListening() {
+    fun startListening(context: Context) {
         if (listening) return
         listening = true
+        acquireMulticastLock(context)
         listenThread = Thread {
             val socket = runCatching {
                 DatagramSocket(null).apply {
@@ -120,5 +145,6 @@ object NearbyBeacon {
     fun stopListening() {
         listening = false
         listenThread = null
+        if (!running) releaseMulticastLock()
     }
 }

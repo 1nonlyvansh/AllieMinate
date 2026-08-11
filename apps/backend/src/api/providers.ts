@@ -13,7 +13,7 @@ import { updateEnv } from '../env';
 import { emitSyncEvent } from '../events';
 import { loadDriveAccounts, saveDriveAccounts, nextDriveAccountId } from '../accounts';
 import { saveFolders } from '../sync/folders';
-import { config } from '../config';
+import { config, googleDriveClientId, googleDriveClientSecret } from '../config';
 import { setProviderDisabled } from '../disabledProviders';
 import { startAutoSyncForFolder, stopAutoSyncForFolder, pauseAutoSyncForFolder, resumeAutoSyncForFolder, isSyncPaused } from '../sync/engine';
 import { deleteSyncState } from '../sync/syncState';
@@ -117,8 +117,8 @@ export function registerProviderRoutes(
     }
     if (oauthTimeout) clearTimeout(oauthTimeout);
 
-    const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
+    const clientId = googleDriveClientId();
+    const clientSecret = googleDriveClientSecret();
     if (!clientId || !clientSecret) {
       return reply.code(400).send({ error: 'missing GOOGLE_DRIVE_CLIENT_ID/SECRET in .env — set those up first' });
     }
@@ -206,8 +206,8 @@ export function registerProviderRoutes(
     }
     if (addAccountTimeout) clearTimeout(addAccountTimeout);
 
-    const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
+    const clientId = googleDriveClientId();
+    const clientSecret = googleDriveClientSecret();
     if (!clientId || !clientSecret) {
       return reply.code(400).send({ error: 'missing GOOGLE_DRIVE_CLIENT_ID/SECRET in .env — set those up first' });
     }

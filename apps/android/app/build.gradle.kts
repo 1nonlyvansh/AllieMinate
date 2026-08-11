@@ -13,8 +13,8 @@ android {
         targetSdk = 35
         // versionCode must increase on every release install for Android to accept an upgrade over
         // an existing install. Kept in sync with versionName: major*10000 + minor*100 + patch.
-        versionCode = 20808
-        versionName = "2.8.8"
+        versionCode = 20809
+        versionName = "2.8.9"
     }
 
     buildTypes {
