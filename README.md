@@ -21,7 +21,11 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/1nonlyvansh/AllieMinate/ci.yml?branch=main&style=flat-square&label=CI&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/Status-Active%20Dev-1db954?style=flat-square&labelColor=050d1a)](CHANGELOG.md)
 
-[Website](https://allieminate.app/) · [Download](https://github.com/1nonlyvansh/AllieMinate/releases/latest) · [Changelog](CHANGELOG.md) · [Docs](docs/) · [Report a Bug](https://github.com/1nonlyvansh/AllieMinate/issues/new?template=bug_report.md)
+[![Website](https://img.shields.io/badge/🌐_Website-allieminate.app-00e5ff?style=for-the-badge&labelColor=050d1a)](https://allieminate.app/)
+[![Download](https://img.shields.io/badge/⬇_Download-Latest_Release-00e5ff?style=for-the-badge&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/releases/latest)
+[![Changelog](https://img.shields.io/badge/📋_Changelog-What's_New-1db954?style=for-the-badge&labelColor=050d1a)](CHANGELOG.md)
+[![Docs](https://img.shields.io/badge/📖_Docs-Read_the_Docs-1db954?style=for-the-badge&labelColor=050d1a)](docs/)
+[![Report a Bug](https://img.shields.io/badge/🐛_Report_a_Bug-Issues-ff5c5c?style=for-the-badge&labelColor=050d1a)](https://github.com/1nonlyvansh/AllieMinate/issues/new?template=bug_report.md)
 
 </div>
 
@@ -29,31 +33,62 @@
 
 ## Contents
 
-1. [What is AllieMinate?](#what-is-allieminate)
-2. [Screenshots](#screenshots)
-3. [Supported platforms](#supported-platforms)
-4. [Download](#download)
-5. [Installation](#installation)
-6. [First launch](#first-launch)
-7. [Cloud provider support](#cloud-provider-support)
-8. [Device pairing](#device-pairing)
-9. [Sync](#sync)
-10. [Nearby Share](#nearby-share)
-11. [Universal Clipboard](#universal-clipboard)
-12. [Feature Matrix](#feature-matrix)
-13. [Compatibility Matrix](#compatibility-matrix)
-14. [Security & privacy model](#security--privacy-model)
-15. [Architecture](#architecture)
-16. [System requirements](#system-requirements)
-17. [Known Issues](#known-issues)
-18. [Troubleshooting](#troubleshooting)
-19. [Developer Setup](#developer-setup)
-20. [Testing](#testing)
-21. [Contributing](#contributing)
-22. [Roadmap](#roadmap)
-23. [License](#license)
-24. [Changelog / releases](#changelog--releases)
-25. [Support / contact](#support--contact)
+<table>
+<tr>
+<td valign="top">
+
+**Overview**
+- [🧭 What is AllieMinate?](#what-is-allieminate)
+- [🖼️ Screenshots](#screenshots)
+- [💻 Supported platforms](#supported-platforms)
+- [⬇️ Download](#download)
+- [🛠️ Installation](#installation)
+
+</td>
+<td valign="top">
+
+**Getting started**
+- [🚀 First launch](#first-launch)
+- [☁️ Cloud provider support](#cloud-provider-support)
+- [🔗 Device pairing](#device-pairing)
+- [🔄 Sync](#sync)
+- [📡 Nearby Share](#nearby-share)
+
+</td>
+<td valign="top">
+
+**Features**
+- [📋 Universal Clipboard](#universal-clipboard)
+- [✅ Feature Matrix](#feature-matrix)
+- [📊 Compatibility Matrix](#compatibility-matrix)
+- [🔒 Security & privacy model](#security--privacy-model)
+- [🏗️ Architecture](#architecture)
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+**Reference**
+- [🖥️ System requirements](#system-requirements)
+- [⚠️ Known Issues](#known-issues)
+- [🔧 Troubleshooting](#troubleshooting)
+- [👩‍💻 Developer Setup](#developer-setup)
+- [🧪 Testing](#testing)
+
+</td>
+<td valign="top">
+
+**Project**
+- [🤝 Contributing](#contributing)
+- [🗺️ Roadmap](#roadmap)
+- [📄 License](#license)
+- [📝 Changelog / releases](#changelog--releases)
+- [💬 Support / contact](#support--contact)
+
+</td>
+</tr>
+</table>
 
 ---
 
