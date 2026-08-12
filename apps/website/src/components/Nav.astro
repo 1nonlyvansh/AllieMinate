@@ -112,7 +112,14 @@ const isActive = (href: string) => path === href || path === href + '/';
     flex-direction: column;
     gap: 2px;
     padding: var(--space-2) var(--space-3) var(--space-3);
-    background: var(--glass-bg-soft);
+    /* Was --glass-bg-soft (~0.4 opacity) — the nav sits position:fixed, so its own height
+       growing when the menu opens doesn't push page content down; the menu floats directly
+       over the hero, and a near-transparent background left the hero text visible/overlapping
+       through it. Needs to read as solidly "on top", not a subtle tint. */
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+    box-shadow: var(--shadow-card);
     border-bottom: 1px solid var(--glass-border);
   }
   .nav-mobile:not([hidden]) {

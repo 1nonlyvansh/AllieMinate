@@ -3,26 +3,24 @@
 Honest list of what this rebuild could not verify, fabricate, or finish — per the build prompt's
 own "do not invent" rule. Nothing below was silently worked around.
 
-## Release-critical: Windows has no `.exe` asset on GitHub Releases
+## Resolved: Windows `.exe` now on GitHub Releases
 
-Checked `gh api repos/1nonlyvansh/AllieMinate/releases` directly. There is currently **one**
-release on GitHub:
+Originally flagged here as missing — since fixed. The `v1.0.0`-tagged release (display title
+"v2.8.8 (.apk, .exe. .dmg Installers)") now has a real `AllieMinate.Setup.0.1.0.exe` asset
+attached. The Windows download button links directly to it via
+`releases/latest/download/AllieMinate.Setup.0.1.0.exe`, verified to resolve, same pattern as
+macOS/Android.
 
-- **Tag**: `v1.0.0`
-- **Display title**: "v2.8.8 (.apk, .exe. .dmg Installers)"
-- **Actual assets**: `AllieMinate.apk`, `AllieMinate.dmg` — **no `.exe` file is attached.**
+Note the asset's own filename still says `0.1.0` (a stale version number baked into the
+installer at build time, before this repo's version-consistency fix landed on the Windows build
+side) — cosmetic, doesn't affect the download working, but worth a real `2.8.8`-versioned
+rebuild next time the Windows installer gets rebuilt.
 
-The repo also has a separate git tag `v2.8.8` (pushed in an earlier session), but **no GitHub
-Release was ever created for it** — no release page, no assets.
-
-Because of this, the Windows download button on this site does **not** link to a direct `.exe`
-asset (one doesn't exist to link to) — it links to `https://github.com/1nonlyvansh/AllieMinate/releases/latest`,
-same as the prompt's own documented fallback for an "indeterminate" asset name. macOS and Android
-use real, verified direct asset links
-(`releases/latest/download/AllieMinate.dmg` / `.apk`, confirmed via `curl -I` to resolve correctly).
-
-**This needs your attention independent of this website work**: either upload a real
-`AllieMinate.exe`/`AllieMinate-Setup.exe` to the existing release, or create a proper release on
+The repo still has a separate git tag `v2.8.8` (pushed in an earlier session) with **no GitHub
+Release created for it** — no release page, no assets. Not blocking anything today since
+`releases/latest` correctly resolves to the `v1.0.0`-tagged release that actually has installers,
+but worth tidying up (either attach assets to a real `v2.8.8` release, or delete the empty tag)
+so `git tag` and "latest GitHub Release" agree with each other.
 the `v2.8.8` tag with all three assets and retire/relabel the mislabeled `v1.0.0` one. Until then,
 a visitor clicking "Get the installer" for Windows lands on the releases page and has to find the
 right thing themselves — there's currently nothing better to link to honestly.

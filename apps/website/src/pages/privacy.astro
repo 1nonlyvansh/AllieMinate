@@ -16,14 +16,17 @@ import Footer from '../components/Footer.astro';
       <p>AllieMinate has no server of its own that stores, sees, or relays your files, credentials, or account data. It runs entirely on your own devices. When you connect a cloud account (e.g. Google Drive) or pair a device (e.g. your phone), all communication happens either directly between your device and the cloud provider's own servers, or directly between your own paired devices over your local network. Nothing passes through any server operated by AllieMinate or its developer, because none exists.</p>
 
       <h2>Google Account data (Google Drive integration)</h2>
-      <p>When you connect a Google account through "Add Google Account," AllieMinate requests the <code>drive.file</code> scope. This scope limits access to only the files and folders you explicitly open, create, or select through AllieMinate's own interface — it does not grant blanket access to your entire Drive.</p>
+      <p>When you connect a Google account through "Add Google Account," AllieMinate requests the <code>https://www.googleapis.com/auth/drive</code> scope — full read/write access to your Google Drive, not the narrower <code>drive.file</code> scope. This is a deliberate choice, not an oversight: AllieMinate's entire purpose is to let you browse and manage the Drive files you <em>already have</em>, not just files created through AllieMinate itself. The narrower <code>drive.file</code> scope only exposes files an app created or that a user explicitly opened through a picker dialog — it cannot list your existing folder structure, which is core to what AllieMinate does.</p>
       <ul>
-        <li>AllieMinate uses this access solely to let you browse, upload, download, rename, move, and organize the files you choose to interact with through the app.</li>
-        <li>OAuth tokens are stored locally on your own device only (in the app's local configuration), never transmitted to or stored on any third-party or AllieMinate-operated server.</li>
-        <li>AllieMinate does not read, scan, analyze, or share the content of your files for any purpose other than displaying and transferring them at your direct request.</li>
+        <li>AllieMinate uses this access to let you browse, search, upload, download, rename, move, organize, and delete files across your actual Drive — the same set of operations Drive's own web interface allows, from within AllieMinate's unified view alongside your other cloud accounts.</li>
+        <li>OAuth refresh tokens are stored locally on your own device only (in the app's local configuration), never transmitted to or stored on any third-party or AllieMinate-operated server — there is no AllieMinate server at all.</li>
+        <li>AllieMinate does not read, scan, analyze, or share the content of your files for any purpose other than displaying and transferring them at your direct request. Nothing is scanned for advertising, profiling, or any automated purpose.</li>
         <li>AllieMinate does not sell, rent, or share your Google user data with any third party, and does not use it for advertising.</li>
         <li>You can revoke AllieMinate's access at any time from your Google Account's <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Third-party access settings</a>, or by removing the account from within AllieMinate's Settings.</li>
       </ul>
+
+      <h2>Google Photos data</h2>
+      <p>AllieMinate separately offers browsing your Google Photos library, using Google's Photos Picker API (<code>photospicker.mediaitems.readonly</code>) — you explicitly select which photos/videos to work with in a Google-hosted picker dialog; AllieMinate never receives blanket access to your whole Photos library through this flow.</p>
 
       <h2>Other cloud providers</h2>
       <p>The same principle applies to every other provider AllieMinate supports (OneDrive, Backblaze B2, IDrive e2, MEGA, pCloud): credentials are stored locally on your device, and all file operations happen directly between your device and that provider's API.</p>

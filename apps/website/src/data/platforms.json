@@ -24,8 +24,8 @@
       "System tray quick-access panel",
       "App Lock via app PIN (Windows Hello not yet implemented)"
     ],
-    "downloadLabel": "Get the installer",
-    "downloadHref": "https://github.com/1nonlyvansh/AllieMinate/releases/latest",
+    "downloadLabel": "Download .exe",
+    "downloadHref": "https://github.com/1nonlyvansh/AllieMinate/releases/latest/download/AllieMinate.Setup.0.1.0.exe",
     "installNote": "Unsigned build — SmartScreen shows a warning. Click More info → Run anyway.",
     "guideHref": "https://github.com/1nonlyvansh/AllieMinate/blob/main/docs/installation/windows.md"
   },
@@ -40,7 +40,7 @@
       "Biometric App Lock, up to 5 paired desktops"
     ],
     "downloadLabel": "Download .apk",
-    "downloadHref": "https://github.com/1nonlyvansh/AllieMinate/releases/latest/download/AllieMinate.apk",
+    "downloadHref": "https://github.com/1nonlyvansh/AllieMinate/releases/latest/download/AllieMinate-App.apk",
     "installNote": "Not on the Play Store — allow \"Install unknown apps\" for your browser/files app. This build is signed with the default Android debug keystore, not a release key.",
     "guideHref": "https://github.com/1nonlyvansh/AllieMinate/blob/main/docs/installation/android.md"
   }

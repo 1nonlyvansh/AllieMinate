@@ -48,3 +48,31 @@ but **macOS Gatekeeper currently refuses to register them** — ad-hoc-signed Sh
 user-facing override the way a regular app launch does (no "Open Anyway"). This requires a paid Apple
 Developer ID to actually ship. Until then, use Nearby Share or a Sync Pair instead of the system share
 sheet.
+
+## Cross-Device Search
+
+One search bar, everywhere at once — every connected cloud account (across every provider) and every
+currently-reachable paired device, queried together instead of one at a time. Results are grouped by
+source so you can tell a hit in Google Drive apart from one on a paired phone's local storage, but the
+query itself doesn't need you to pick a source first. On desktop it's reachable from the global search
+field in the sidebar; on Android it's under the same section as file browsing.
+
+## Transfer History
+
+A real log of file movement between your own devices — not just a generic "activity feed." It's
+two-directional: files a paired device sent *to* you, and files you pulled *from* a paired device, both
+show up with timestamps, source/destination device names, and file size. This is separate from Trash
+(which tracks cloud-provider deletions) and from Sync Pair progress (which tracks an ongoing sync
+relationship, not one-off transfers) — Transfer History is specifically the record of Nearby Share and
+device-to-device Send actions.
+
+## Menu Bar / Tray Quick Access
+
+On desktop, AllieMinate keeps running in the system menu bar (macOS) or tray (Windows) even when the
+main window is closed. Clicking the icon opens a small panel showing your most recent cloud and device
+files, with the same inline image/video preview the main app uses — no need to bring the full window
+forward for a quick look. Files can be dragged straight out of that panel into Finder/Explorer, Mail,
+or any other app, the same way you'd drag from a real folder, and dropping a file onto the tray icon
+itself sends it straight to a paired device or cloud folder without opening AllieMinate at all. A
+small progress bar in the panel reflects whatever's currently uploading or downloading in the
+background.
