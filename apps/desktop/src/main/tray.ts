@@ -2,6 +2,7 @@ import { Tray, BrowserWindow, nativeImage, screen, ipcMain, clipboard, Menu, app
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { injectThemeCss } from './platform/injectTheme';
+import { copyFileToWindowsClipboard } from './platform/windows/clipboardFile';
 import { showMainWindow } from './index';
 
 const API_BASE = 'http://localhost:4310';
@@ -10,6 +11,7 @@ let panel: BrowserWindow | null = null;
 let pendingDropFiles: string[] | null = null;
 let pendingDropKind: 'cloud' | 'device' | 'nearby' | 'both' = 'both';
 let dragLeaveTimer: ReturnType<typeof setTimeout> | null = null;
+let displayChangeHandler: (() => void) | null = null;
 
 const PROVIDER_DISPLAY_NAME: Record<string, string> = {
   b2: 'Backblaze B2',
@@ -17,6 +19,7 @@ const PROVIDER_DISPLAY_NAME: Record<string, string> = {
   'google-drive': 'Google Drive',
   mega: 'MEGA',
   pcloud: 'pCloud',
+  onedrive: 'OneDrive',
 };
 
 interface FolderInfo {
@@ -377,6 +380,11 @@ function ensureDropSensor(): void {
   if (!dropSensor.isVisible()) dropSensor.showInactive();
 }
 
+function updateDropSensorPosition(): void {
+  if (process.platform !== 'win32' || !tray || !dropSensor || dropSensor.isDestroyed()) return;
+  positionPanelNearTray(dropSensor, SENSOR_SIZE, SENSOR_SIZE);
+}
+
 function handleFilesDropped(filePaths: string[], kind: 'cloud' | 'device' | 'nearby' | 'both' = 'both'): void {
   pendingDropFiles = filePaths;
   pendingDropKind = kind;
@@ -445,6 +453,14 @@ export function createTray(): void {
   tray.setToolTip('AllieMinate');
   ensureDropSensor();
 
+  // Reposition drop sensor when display configuration changes (taskbar move, monitor add/remove, etc.)
+  if (process.platform === 'win32') {
+    displayChangeHandler = () => updateDropSensorPosition();
+    screen.on('display-metrics-changed', displayChangeHandler);
+    screen.on('display-added', displayChangeHandler);
+    screen.on('display-removed', displayChangeHandler);
+  }
+
   // the sensor (Windows only — see createDropSensor's comment) noticed a real OS drag entering its
   // bounds near the tray icon; hand off to the exact same flow macOS's native tray.on('drag-enter'/
   // 'drag-leave') already drives below, so both platforms end up at the identical drop-target UI.
@@ -467,7 +483,15 @@ export function createTray(): void {
   ipcMain.handle('tray:copyFile', async (_e, url: string, filename: string) => {
     const result = await downloadToTemp(url, filename);
     if (!result.ok || !result.path) return result;
-    clipboard.writeBuffer('public.file-url', Buffer.from(`file://${encodeURI(result.path)}`, 'utf-8'));
+    if (process.platform === 'win32') {
+      try {
+        await copyFileToWindowsClipboard(result.path);
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    } else {
+      clipboard.writeBuffer('public.file-url', Buffer.from(`file://${encodeURI(result.path)}`, 'utf-8'));
+    }
     return { ok: true };
   });
 

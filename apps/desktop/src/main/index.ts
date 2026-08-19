@@ -5,6 +5,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { createWindow as createMacWindow } from './platform/mac/window';
 import { createWindow as createWindowsWindow } from './platform/windows/window';
+import { copyFileToWindowsClipboard } from './platform/windows/clipboardFile';
 import { createTray } from './tray';
 import { isAppLockEnabled, setAppLockEnabled, verifyPin, canUseTouchID, tryTouchID } from './security';
 import { connectUsbTunnel, disconnectUsbTunnel, launchPairDeepLink } from './adb';
@@ -82,6 +83,7 @@ function spawnBackend(): void {
       // the backend is a plain Node child process with no Electron runtime, so it can't call
       // app.getPath() itself for the local-folder-browsing feature's known folders — resolve them here
       // (correct even if the user relocated one via the registry/Finder) and hand them down as env vars.
+      ALLIMINATE_DATA_DIR: app.getPath('userData'),
       ALLIMINATE_FOLDER_DESKTOP: app.getPath('desktop'),
       ALLIMINATE_FOLDER_DOWNLOADS: app.getPath('downloads'),
       ALLIMINATE_FOLDER_DOCUMENTS: app.getPath('documents'),
@@ -201,10 +203,42 @@ ipcMain.handle('security:verifyPin', (_e, pin: string) => verifyPin(pin));
 ipcMain.handle('security:canTouchID', () => canUseTouchID());
 ipcMain.handle('security:tryTouchID', () => tryTouchID());
 
-ipcMain.handle('launchAtLogin:isEnabled', () => app.getLoginItemSettings().openAtLogin);
-ipcMain.handle('launchAtLogin:setEnabled', (_e, enabled: boolean) => {
-  app.setLoginItemSettings({ openAtLogin: enabled });
-});
+// process.execPath is a self-contained bundle once packaged, but on an unpackaged dev run (how this app
+// currently runs on Windows — there's no build-app.sh equivalent here yet) it's just electron.exe with no
+// idea which app to load, so a boot-time launch spawned Electron's own default template window instead of
+// AllieMinate. Passing the app path explicitly as an arg fixes that; a packaged build needs neither.
+// CONFIRMED LIVE (do not "fix" this again without re-testing against the real registry first): calling
+// setLoginItemSettings a SECOND time for the same process.execPath but with DIFFERENT args does NOT add or
+// update a separate, independently-tracked entry — it REPLACES the single registration for that exe path,
+// full stop. An earlier version of this function tried to explicitly disable the old bare-args identity
+// with a second call (`{openAtLogin:false, path: process.execPath, args: []}`) reasoning that Windows keeps
+// a per-identity list — that call didn't disable a second entry, it overwrote/deleted the correct
+// registration THIS SAME FUNCTION had just written moments earlier, silently reverting the whole fix back
+// to the exact original bug (verified by reading HKCU...\Run directly before and after). One call only.
+function applyLoginItemSettings(enabled: boolean): void {
+  if (!app.isPackaged) {
+    app.setLoginItemSettings({ openAtLogin: enabled, path: process.execPath, args: [app.getAppPath()] });
+  } else {
+    app.setLoginItemSettings({ openAtLogin: enabled });
+  }
+  console.log(
+    `[launchAtLogin] applyLoginItemSettings(${enabled}) — isPackaged=${app.isPackaged} execPath=${process.execPath} appPath=${app.getAppPath()} → now:`,
+    JSON.stringify(app.getLoginItemSettings()),
+  );
+}
+
+// The plain, no-argument getLoginItemSettings() checks the login item matching process.execPath with EMPTY
+// args by default — on an unpackaged run that's the OLD bare-exe identity above, not the one this app
+// actually writes to (path+[appPath]). Querying with the same path/args the write above uses is what
+// makes this report the real, current state instead of always reading as "off" for a correctly-configured
+// unpackaged install.
+function readLoginItemEnabled(): boolean {
+  if (!app.isPackaged) return app.getLoginItemSettings({ path: process.execPath, args: [app.getAppPath()] }).openAtLogin;
+  return app.getLoginItemSettings().openAtLogin;
+}
+
+ipcMain.handle('launchAtLogin:isEnabled', () => readLoginItemEnabled());
+ipcMain.handle('launchAtLogin:setEnabled', (_e, enabled: boolean) => applyLoginItemSettings(enabled));
 
 ipcMain.handle('usb:connect', () => connectUsbTunnel());
 ipcMain.handle('usb:launchPairDeepLink', (_e, code: string, macName: string) => launchPairDeepLink(code, macName));
@@ -230,11 +264,26 @@ ipcMain.handle('dialog:pickFolder', async () => {
   return { canceled: result.canceled, path: result.filePaths[0] };
 });
 
-ipcMain.handle('file:copyLocal', (_e, filePath: string) => {
+ipcMain.handle('file:copyLocal', async (_e, filePath: string) => {
   if (!fs.existsSync(filePath)) return { ok: false, error: 'file no longer exists at that path' };
-  clipboard.writeBuffer('public.file-url', Buffer.from(`file://${encodeURI(filePath)}`, 'utf-8'));
+  if (process.platform === 'win32') {
+    try {
+      await copyFileToWindowsClipboard(filePath);
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  } else {
+    clipboard.writeBuffer('public.file-url', Buffer.from(`file://${encodeURI(filePath)}`, 'utf-8'));
+  }
   return { ok: true };
 });
+
+// Universal Clipboard (Phase 5) — thin wrappers around Electron's native clipboard module, same one
+// file:copyLocal above already uses for the existing "Copy to Clipboard" file feature. Reused deliberately
+// over the browser navigator.clipboard API, which would've needed a permission story Electron doesn't
+// cleanly give a background poll loop.
+ipcMain.handle('clipboard:readText', () => clipboard.readText());
+ipcMain.handle('clipboard:writeText', (_e, text: string) => clipboard.writeText(text));
 
 app.whenReady().then(async () => {
   // nothing in this app ever calls app.dock.hide() — the Dock icon (and macOS's own "running" indicator
@@ -242,6 +291,11 @@ app.whenReady().then(async () => {
   // sitting tray-only. Making that explicit here means it can't silently regress if something upstream
   // (a future change, a stale Electron default) ever hides it without anyone noticing.
   if (process.platform === 'darwin') app.dock?.show();
+  // self-heals a stale/wrong-shape login-item entry (e.g. one registered by a build from before the
+  // path/args fix above existed) without depending on the user manually toggling Settings' "Open at Boot"
+  // off then on — Windows already reports openAtLogin as true for the OLD broken entry, so the toggle's UI
+  // never looks like it needs re-touching, and the bad entry would otherwise never get corrected.
+  if (readLoginItemEnabled()) applyLoginItemSettings(true);
   await ensureBackend();
   createMainWindow();
   createTray();
@@ -266,4 +320,11 @@ app.on('before-quit', () => {
   quitting = true;
   backendProcess?.kill();
   disconnectUsbTunnel();
+  // Clean up display change handler for drop sensor repositioning
+  if (process.platform === 'win32') {
+    const { screen } = require('electron');
+    screen.removeAllListeners('display-metrics-changed');
+    screen.removeAllListeners('display-added');
+    screen.removeAllListeners('display-removed');
+  }
 });

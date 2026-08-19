@@ -1,17 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { baseProviderOf } from '@alliminate/shared';
+import type { SyncEvent } from '@alliminate/shared';
 import type { PairedDeviceInfo } from './lib/types';
 import { Thumbnail } from './components/Thumbnail';
 import { Skeleton } from './components/Skeleton';
 import { DropdownMenu } from './components/DropdownMenu';
 import { NearbyPickerModal } from './components/NearbyPickerModal';
+import { PreviewModal, PreviewTarget } from './components/PreviewModal';
 import { usePairedDevices, buildSendMenuItems, sendFileToDevice, SendableFile } from './lib/sendActions';
-import { formatBytes, timeAgo, broadCategorize } from './lib/format';
+import { formatBytes, timeAgo, broadCategorize, deviceBasename } from './lib/format';
 import { IconMac, IconWindows, IconHome, IconCloud, IconDevices, IconDownload, IconCopy, IconShare } from './icons';
 import { isWindows, thisDeviceLabel, deviceNounLower, fileBrowserName } from './lib/platformLabels';
 import { CLOUD_ICONS } from './lib/cloudIcons';
 
 const API_BASE = 'http://localhost:4310';
+const WS_URL = 'ws://localhost:4310/ws';
+const LOCAL_RECENT_POLL_MS = 15000;
+const DEVICE_STATUS_POLL_MS = 15000;
 
 const BASE_PROVIDER_LABEL: Record<string, string> = {
   'google-drive': 'Google Drive', b2: 'Backblaze B2', 'idrive-e2': 'IDrive e2',
@@ -47,6 +52,7 @@ interface DeviceRecentFile {
   size: number;
   modifiedAt: string;
   mimeType?: string;
+  apiSegment: string; // 'folders' | 'sync-pairs' | 'local-folders'
 }
 interface DropFolder {
   id: string;
@@ -146,7 +152,7 @@ function DeviceFileThumb({ f, size = 22 }: { f: DeviceRecentFile; size?: number 
       {!loaded && <div className="tray-device-file-icon"><IconDevices size={size} /></div>}
       <img
         className={`tray-device-file-thumb${loaded ? ' loaded' : ' loading'}`}
-        src={`${API_BASE}/devices/${f.deviceId}/folders/${f.folderId}/thumbnail?key=${encodeURIComponent(f.path)}`}
+        src={`${API_BASE}/devices/${f.deviceId}/${f.apiSegment}/${f.folderId}/thumbnail?key=${encodeURIComponent(f.path)}`}
         alt=""
         onLoad={() => setLoaded(true)}
         onError={() => setFailed(true)}
@@ -157,7 +163,15 @@ function DeviceFileThumb({ f, size = 22 }: { f: DeviceRecentFile; size?: number 
 
 // horizontal, scrollable strip of a single device's most-recent files — revealed with a slide/fade-in
 // animation when its device row is clicked in the tray's Recent Devices Files tab.
-function DeviceRecentStrip({ deviceId }: { deviceId: string }) {
+function DeviceRecentStrip({
+  deviceId,
+  onPreview,
+  refreshSignal,
+}: {
+  deviceId: string;
+  onPreview: (f: DeviceRecentFile) => void;
+  refreshSignal: number;
+}) {
   const [files, setFiles] = useState<DeviceRecentFile[] | null>(null);
 
   useEffect(() => {
@@ -165,7 +179,13 @@ function DeviceRecentStrip({ deviceId }: { deviceId: string }) {
     fetch(`${API_BASE}/devices/${deviceId}/recent?limit=6`, { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
-        if (!cancelled) setFiles(data.files ?? []);
+        if (!cancelled) {
+          const filesWithSegment = (data.files ?? []).map((f: any) => ({
+            ...f,
+            apiSegment: f.apiSegment ?? 'folders',
+          }));
+          setFiles(filesWithSegment);
+        }
       })
       .catch(() => {
         if (!cancelled) setFiles([]);
@@ -173,12 +193,16 @@ function DeviceRecentStrip({ deviceId }: { deviceId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [deviceId]);
+    // refreshSignal ticks on a 'device-recent-updated' push for THIS specific device (see the backend's
+    // syncPeerRecentWatchers) — one shared counter across every paired device is fine here since only one
+    // device's strip is ever expanded at a time, so a tick for a different (collapsed) device just refetches
+    // this one harmlessly instead of doing nothing.
+  }, [deviceId, refreshSignal]);
 
   const shown = files;
 
   function url(f: DeviceRecentFile): string {
-    return `${API_BASE}/devices/${f.deviceId}/folders/${f.folderId}/download?key=${encodeURIComponent(f.path)}`;
+    return `${API_BASE}/devices/${f.deviceId}/${f.apiSegment}/${f.folderId}/download?key=${encodeURIComponent(f.path)}`;
   }
 
   return (
@@ -198,20 +222,13 @@ function DeviceRecentStrip({ deviceId }: { deviceId: string }) {
       {shown !== null && shown.length > 0 && (
         <div className="tray-device-strip-row">
           {shown.map((f) => {
-            const name = f.path.split('/').pop() ?? f.path;
+            const name = deviceBasename(f.path);
             return (
               <RecentFileCard
                 key={f.folderId + f.path}
                 url={url(f)}
                 filename={name}
-                onClick={async () => {
-                  // there's no local copy of a phone file until it's actually fetched — reuse the same
-                  // temp-cache download prepareFileForDrag already does for native drag-out, then reveal
-                  // that cached copy, so clicking a device file behaves the same way This Mac's own files
-                  // do (open Finder at the file) instead of triggering a browser-style download/open.
-                  const result = await window.alliminate.prepareFileForDrag(url(f), name);
-                  if (result.ok && result.path) window.alliminate.showInFinder(result.path);
-                }}
+                onClick={() => onPreview(f)}
               >
                 <DeviceFileThumb f={f} size={20} />
                 <div className="tray-recent-name">{name}</div>
@@ -334,26 +351,42 @@ function RecentFileCard({
   );
 }
 
-// "This Mac" in the Recent Devices Files tab — the Mac's own recently-touched local files, shown the
-// exact same horizontal-scroller way a paired phone's recent files are, via /local/recent instead of a
-// device's LAN-reachable HTTP server.
-function MacRecentStrip({ onShareNearby }: { onShareNearby: (file: SendableFile, name: string) => void }) {
+// "This PC" / "This Mac" in the Recent Devices Files tab — the device's own recently-touched local files,
+// shown the exact same horizontal-scroller way a paired phone's recent files are, via /local/recent instead
+// of a device's LAN-reachable HTTP server.
+function ThisDeviceRecentStrip({
+  onShareNearby,
+  refreshSignal,
+}: {
+  onShareNearby: (file: SendableFile, name: string) => void;
+  refreshSignal: number;
+}) {
   const [files, setFiles] = useState<LocalRecentFile[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${API_BASE}/local/recent?limit=6`, { cache: 'no-store' })
-      .then((res) => res.json())
-      .then((data) => {
-        if (!cancelled) setFiles(data.files ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setFiles([]);
-      });
+    function load(): void {
+      fetch(`${API_BASE}/local/recent?limit=6`, { cache: 'no-store' })
+        .then((res) => res.json())
+        .then((data) => {
+          if (!cancelled) setFiles(data.files ?? []);
+        })
+        .catch(() => {
+          if (!cancelled) setFiles([]);
+        });
+    }
+    load();
+    // the backend's filesystem watcher (see localFiles.ts's startLocalRecentWatcher) pushes
+    // 'local-recent-updated' over the WebSocket the instant a watched folder changes — refreshSignal ticking
+    // is what actually drives real-time updates here. This poll is only the fallback for when the watcher
+    // can't run (a filesystem that doesn't support recursive watching, e.g. a network share) or the socket
+    // is mid-reconnect.
+    const poll = setInterval(load, LOCAL_RECENT_POLL_MS);
     return () => {
       cancelled = true;
+      clearInterval(poll);
     };
-  }, []);
+  }, [refreshSignal]);
 
   const shown = files;
 
@@ -461,6 +494,44 @@ export function TrayPanel(): JSX.Element {
   // the moment a drag enters the panel, regardless of how it got opened.
   const [localDragActive, setLocalDragActive] = useState(false);
   const [dropError, setDropError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
+  const [localFilesRefreshSignal, setLocalFilesRefreshSignal] = useState(0);
+  const [deviceFilesRefreshSignal, setDeviceFilesRefreshSignal] = useState(0);
+
+  // the tray panel is a separate renderer window from the main app (see main/tray.ts) and never otherwise
+  // connects to the backend's WebSocket at all — App.tsx does, the tray never did. Needed here so a
+  // filesystem-watcher push (see localFiles.ts's startLocalRecentWatcher) can tell the open "This
+  // Mac"/"This PC" strip to refresh instantly instead of waiting on its own poll interval.
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+
+    function connect(): void {
+      if (cancelled) return;
+      ws = new WebSocket(WS_URL);
+      ws.onmessage = (msg) => {
+        try {
+          const event: SyncEvent = JSON.parse(msg.data);
+          if (event.type === 'local-recent-updated') setLocalFilesRefreshSignal((n) => n + 1);
+          if (event.type === 'device-recent-updated') setDeviceFilesRefreshSignal((n) => n + 1);
+        } catch {
+          // not a message this listener cares about — ignore
+        }
+      };
+      ws.onclose = () => {
+        if (!cancelled) reconnectTimer = setTimeout(connect, 3000);
+      };
+      ws.onerror = () => ws?.close();
+    }
+    connect();
+
+    return () => {
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      ws?.close();
+    };
+  }, []);
 
   function loadRecent(provider: string = providerFilter) {
     setLoading(true);
@@ -483,7 +554,10 @@ export function TrayPanel(): JSX.Element {
   // its own files on demand. That also means this no longer needs the expensive cross-device fan-out at
   // all just to populate the device row list + online count.
   function loadDeviceRecent() {
-    setDeviceFilesLoading(true);
+    // only the very first fetch shows the skeleton — the 15s poll below re-uses this same function to keep
+    // online/offline pills fresh while the tab stays open, and flashing the whole device list back to its
+    // skeleton state every 15s would be worse than the staleness this poll exists to fix.
+    if (pairedDevices === null) setDeviceFilesLoading(true);
     fetch(`${API_BASE}/devices`)
       .then((res) => res.json())
       .then((devices) => setPairedDevices(devices.paired ?? []))
@@ -525,6 +599,19 @@ export function TrayPanel(): JSX.Element {
     if (recentTab === 'devices' && pairedDevices === null) loadDeviceRecent();
   }, [recentTab]);
 
+  // pairedDevices used to only ever get fetched once, the first time the Devices tab opened — with the
+  // tray panel being a single BrowserWindow that's just hidden/shown (never destroyed), a device's real
+  // online status changing any time after that first fetch left the pill showing whatever it saw way back
+  // then, drifting further from reality the longer the panel stayed open. Poll once the tab's been opened
+  // at least once — this backend does a live isOnline() check on every single /devices call (no server-side
+  // caching to go stale here), so polling alone is what keeps the pills honest.
+  useEffect(() => {
+    if (pairedDevices === null) return;
+    const interval = setInterval(loadDeviceRecent, DEVICE_STATUS_POLL_MS);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pairedDevices === null]);
+
   useEffect(() => {
     return window.alliminate.onTrayState((state) => {
       setTray((prev) => ({ ...prev, ...(state as TrayState) }));
@@ -563,8 +650,34 @@ export function TrayPanel(): JSX.Element {
       ? `${API_BASE}/providers/${f.providerId}/download?key=${encodeURIComponent(f.path)}`
       : `${API_BASE}/folders/${f.folderId}/download?key=${encodeURIComponent(f.path)}`;
   }
+  // real inline preview in the panel (via the same shared PreviewModal every other view uses) instead of
+  // window.open()-ing a bare download URL into a new browser tab.
   function openFile(f: RecentFile) {
-    window.open(fileUrl(f));
+    const name = f.path.split('/').pop() ?? f.path;
+    setPreview({
+      source: f.providerId ? { kind: 'provider', providerId: f.providerId } : { kind: 'folder', folderId: f.folderId },
+      key: f.path,
+      name,
+      size: f.size,
+      provider: BASE_PROVIDER_LABEL[baseProviderOf(f.provider)] ?? f.provider,
+      folderName: f.folderName,
+      modifiedAt: f.modifiedAt,
+      hash: '',
+    });
+  }
+
+  function openDeviceFile(f: DeviceRecentFile) {
+    const name = deviceBasename(f.path);
+    setPreview({
+      source: { kind: 'device', deviceId: f.deviceId, apiSegment: f.apiSegment, folderId: f.folderId },
+      key: f.path,
+      name,
+      size: f.size,
+      provider: f.deviceName,
+      folderName: 'Device',
+      modifiedAt: f.modifiedAt,
+      hash: '',
+    });
   }
 
   const dropReady = (tray.fileNames?.length ?? 0) > 0;
@@ -731,8 +844,9 @@ export function TrayPanel(): JSX.Element {
                   </span>
                 </div>
                 {macExpanded && (
-                  <MacRecentStrip
+                  <ThisDeviceRecentStrip
                     onShareNearby={(file, name) => setNearbyTarget({ file, name })}
+                    refreshSignal={localFilesRefreshSignal}
                   />
                 )}
               </div>
@@ -753,7 +867,9 @@ export function TrayPanel(): JSX.Element {
                             <span className={`status-dot ${d.online ? 'online' : 'offline'}`} /> {d.online ? 'Online' : 'Offline'}
                           </span>
                         </div>
-                        {expanded && <DeviceRecentStrip deviceId={d.id} />}
+                        {expanded && (
+                          <DeviceRecentStrip deviceId={d.id} onPreview={openDeviceFile} refreshSignal={deviceFilesRefreshSignal} />
+                        )}
                       </div>
                     );
                   })}
@@ -893,6 +1009,8 @@ export function TrayPanel(): JSX.Element {
       {nearbyTarget && (
         <NearbyPickerModal file={nearbyTarget.file} fileName={nearbyTarget.name} onClose={() => setNearbyTarget(null)} />
       )}
+
+      {preview && <PreviewModal file={preview} apiBase={API_BASE} onClose={() => setPreview(null)} />}
     </div>
   );
 }

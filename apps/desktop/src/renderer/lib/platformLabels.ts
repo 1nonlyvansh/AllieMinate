@@ -1,7 +1,15 @@
 // single source of truth for platform-dependent UI copy — same renderer bundle ships on both macOS and
 // Windows, so labels branch on window.alliminate.platform (set from process.platform in the preload)
 // instead of being hardcoded to one OS.
-export const isWindows = window.alliminate.platform === 'win32';
+function getPlatform(): string {
+  return (typeof window !== 'undefined' && window.alliminate?.platform) || 'unknown';
+}
+
+function isWindowsPlatform(): boolean {
+  return getPlatform() === 'win32';
+}
+
+export const isWindows = isWindowsPlatform();
 
 export const osName = isWindows ? 'Windows' : 'macOS';
 export const thisDeviceLabel = isWindows ? 'This PC' : 'This Mac';

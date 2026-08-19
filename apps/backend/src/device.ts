@@ -46,6 +46,10 @@ const VIRTUAL_IFACE_SUBSTRINGS = [
   'utun', 'awdl', 'llw', 'bridge', 'vnic', 'ppp', 'ipsec', 'tun', 'tap', 'docker', 'veth',
   'vethernet', 'virtualbox', 'vmware', 'hyper-v', 'wsl', 'npcap', 'loopback',
   'tailscale', 'zerotier', 'wireguard', 'openvpn', 'bluetooth',
+  // Windows VPN adapters
+  'vpn', 'nordvpn', 'protonvpn', 'expressvpn', 'surfshark', 'mullvad', 'wg', 'wintun',
+  'virtual adapter', 'miniport', 'tap-win32', 'tap-windows', 'tap0', 'tap1', 'tap2',
+  'vgate', 'vnet', 'hyperv', 'docker-desktop', 'vmware network adapter',
 ];
 
 // A name blocklist always lags new virtual-adapter software (found live: a "vgate0" interface handing

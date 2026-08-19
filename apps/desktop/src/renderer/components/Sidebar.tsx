@@ -18,13 +18,14 @@ import {
   IconDocument,
   IconArchive,
   IconSync,
+  IconInfo,
 } from '../icons';
 import { Skeleton } from './Skeleton';
 import { BRAND_LOGO_DATA_URI } from '../lib/brandLogo';
 
 export type ViewId =
   | 'overview' | 'files' | 'pinned' | 'cloud-services' | 'devices' | 'share' | 'trash' | 'settings' | 'sync'
-  | 'cat-image' | 'cat-video' | 'cat-audio' | 'cat-document' | 'cat-archive' | 'google-photos';
+  | 'cat-image' | 'cat-video' | 'cat-audio' | 'cat-document' | 'cat-archive' | 'google-photos' | 'about';
 
 const NAV: { id: ViewId; label: string; icon: (p: { size?: number }) => JSX.Element }[] = [
   { id: 'overview', label: 'Overview', icon: IconHome },
@@ -59,7 +60,7 @@ function providerLabel(id: string): string {
 }
 
 function formatGB(bytes: number): string {
-  return (bytes / 1024 ** 3).toFixed(1);
+  return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 }
 
 export function Sidebar({
@@ -216,6 +217,10 @@ export function Sidebar({
         <button className={`nav-item${view === 'settings' ? ' active' : ''}`} onClick={() => onNavigate('settings')}>
           <IconSettings size={17} />
           <span className="label">Settings</span>
+        </button>
+        <button className={`nav-item${view === 'about' ? ' active' : ''}`} onClick={() => onNavigate('about')}>
+          <IconInfo size={17} />
+          <span className="label">About AllieMinate</span>
         </button>
       </div>
     </aside>

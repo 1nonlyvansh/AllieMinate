@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { PairedDeviceInfo, RemoteFolder, ClipboardEntry } from '../lib/types';
 import type { FileEntry, ProviderStorage } from '@alliminate/shared';
-import { formatBytes, broadCategorize } from '../lib/format';
+import { formatBytes, broadCategorize, deviceBasename } from '../lib/format';
 import { IconMac, IconWindows, IconPhone, IconDevices, IconChevronLeft, IconAdd, IconImage, IconVideo, IconAudio, IconDocument, IconArchive, IconFiles, IconFolder } from '../icons';
 import { isWindows, osName, thisDeviceLabel, showInFileBrowserLabel } from '../lib/platformLabels';
 import { PairDeviceModal } from '../components/PairDeviceModal';
@@ -11,6 +11,7 @@ import { DropdownMenu } from '../components/DropdownMenu';
 import { Modal } from '../components/Modal';
 import { ProviderPickerModal } from '../components/ProviderPickerModal';
 import { Thumbnail } from '../components/Thumbnail';
+import { PreviewModal, PreviewTarget } from '../components/PreviewModal';
 import { timeAgo } from '../lib/format';
 
 const API_BASE = 'http://localhost:4310';
@@ -98,80 +99,8 @@ const CATEGORY_ICON: Record<string, string> = {
   archives: 'archive',
 };
 
-// inline preview only — mirrors TrashView's TrashPreviewModal pattern, just sourced from a paired device
-// instead of the trash bin.
-function DevicePreviewModal({
-  device,
-  folderId,
-  apiSegment,
-  file,
-  onClose,
-}: {
-  device: PairedDeviceInfo;
-  folderId: string;
-  apiSegment: 'folders' | 'local-folders';
-  file: DeviceFileEntry;
-  onClose: () => void;
-}) {
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const category = broadCategorize(file.path, file.mimeType);
-  const name = file.path.split('/').pop() ?? file.path;
-
-  useEffect(() => {
-    let cancelled = false;
-    let url: string | null = null;
-    setStatus('loading');
-    fetch(`${API_BASE}/devices/${device.id}/${apiSegment}/${folderId}/download?key=${encodeURIComponent(file.path)}`)
-      .then((res) => {
-        if (!res.ok) throw new Error('download failed');
-        return res.blob();
-      })
-      .then((blob) => {
-        if (cancelled) return;
-        url = URL.createObjectURL(blob);
-        setBlobUrl(url);
-        setStatus('ready');
-      })
-      .catch(() => {
-        if (!cancelled) setStatus('error');
-      });
-    return () => {
-      cancelled = true;
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [device.id, apiSegment, folderId, file.path]);
-
-  const big = category === 'image' || category === 'video';
-
-  return (
-    <Modal title={name} onClose={onClose} size={big ? 'lg' : undefined} footer={<button className="btn" onClick={onClose}>Close</button>}>
-      <div className={`preview-area${big ? ' preview-area-lg' : ''}`}>
-        {status === 'loading' && <div className="empty-state">Loading preview…</div>}
-        {status === 'error' && <div className="empty-state">Couldn't load preview</div>}
-        {status === 'ready' && blobUrl && category === 'image' && (
-          <img src={blobUrl} style={{ maxWidth: '100%', maxHeight: '65vh', borderRadius: 8, display: 'block', margin: '0 auto' }} />
-        )}
-        {status === 'ready' && blobUrl && category === 'video' && (
-          <video src={blobUrl} controls style={{ maxWidth: '100%', maxHeight: '65vh', borderRadius: 8, display: 'block', margin: '0 auto' }} />
-        )}
-        {status === 'ready' && blobUrl && category === 'audio' && <audio src={blobUrl} controls style={{ width: '100%' }} />}
-        {status === 'ready' && blobUrl && category === 'document' && file.mimeType === 'application/pdf' && (
-          <embed src={`${blobUrl}#toolbar=1&view=FitH`} type="application/pdf" style={{ width: '100%', height: '65vh', border: 'none', borderRadius: 8 }} />
-        )}
-        {status === 'ready' && (category !== 'image' && category !== 'video' && category !== 'audio') && file.mimeType !== 'application/pdf' && (
-          <div className="empty-state">
-            {categoryIcon(category, 30)}
-            <div style={{ marginTop: 10 }}>No inline preview for this file type.</div>
-          </div>
-        )}
-      </div>
-    </Modal>
-  );
-}
-
 function DeviceDetailsModal({ file, onClose }: { file: DeviceFileEntry; onClose: () => void }) {
-  const name = file.path.split('/').pop() ?? file.path;
+  const name = deviceBasename(file.path);
   return (
     <Modal title="Details" onClose={onClose} footer={<button className="btn" onClick={onClose}>Close</button>}>
       <table className="prop-table">
@@ -207,6 +136,7 @@ function RemoteBrowser({
   const [error, setError] = useState<string | null>(null);
   const [filesError, setFilesError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectAnchor, setSelectAnchor] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<DeviceFileEntry | null>(null);
   const [detailsFile, setDetailsFile] = useState<DeviceFileEntry | null>(null);
   const [copyingToCloud, setCopyingToCloud] = useState(false);
@@ -214,10 +144,14 @@ function RemoteBrowser({
   const [openWithApps, setOpenWithApps] = useState<Record<string, { name: string; path: string }[]>>({});
   const [openWithPrefs, setOpenWithPrefs] = useState<Record<string, string>>({});
   const [renamingFile, setRenamingFile] = useState<DeviceFileEntry | null>(null);
-  // Clouds browses the peer's cloud-backed FolderConfig folders (existing behavior); Local Folders
-  // browses its real OS folders (Desktop/Downloads/Received/...) — same UI, different peer route family.
+  // Cloud tab always means "what this device has synced via Sync Engine / Universal Sync" — same
+  // sync-pairs family regardless of peer platform. Local Folders means the device's own local storage:
+  // a PC's real filesystem (local-folders), or — since Android has no working local-folders route on its
+  // own LocalHttpServer — the MediaStore categories that used to live under the old Cloud tab.
   const [browseMode, setBrowseMode] = useState<'cloud' | 'local'>('cloud');
-  const apiSegment = browseMode === 'local' ? 'local-folders' : 'folders';
+  const apiSegment = browseMode === 'cloud' ? 'sync-pairs' : device.platform === 'android' ? 'folders' : 'local-folders';
+  // For Android, 'folders' serves both MediaStore categories AND the "Received" inbox.
+  // For desktop peers, 'local-folders' is used for real filesystem folders.
 
   useEffect(() => {
     fetch(`${API_BASE}/storage`)
@@ -259,7 +193,9 @@ function RemoteBrowser({
       .then((data) => {
         if (data.error) throw new Error(data.error);
         const list: RemoteFolder[] = data.folders ?? [];
-        if (browseMode === 'cloud') list.sort((a, b) => CATEGORY_ORDER.indexOf(a.id) - CATEGORY_ORDER.indexOf(b.id));
+        // CATEGORY_ORDER only means anything for the MediaStore-category family (Android's Local Folders
+        // tab); sync-pairs and real filesystem folders have arbitrary names, so this sort is a no-op there.
+        if (apiSegment === 'folders') list.sort((a, b) => CATEGORY_ORDER.indexOf(a.id) - CATEGORY_ORDER.indexOf(b.id));
         setFolders(list);
         if (list.length > 0) openCategory(list[0]);
       })
@@ -285,7 +221,7 @@ function RemoteBrowser({
     setSubPath(path);
     setFilesLoading(true);
     setFilesError(null);
-    const qs = browseMode === 'local' && path ? `?path=${encodeURIComponent(path)}` : '';
+    const qs = apiSegment === 'local-folders' && path ? `?path=${encodeURIComponent(path)}` : '';
     fetch(`${API_BASE}/devices/${device.id}/${apiSegment}/${f.id}/files${qs}`)
       .then((res) => res.json())
       .then((data) => {
@@ -309,6 +245,48 @@ function RemoteBrowser({
     });
   }
 
+  // Finder-style click selection: plain click selects ONLY this file (replaces whatever was selected),
+  // Cmd/Ctrl-click toggles this file into/out of the existing selection, Shift-click selects the
+  // contiguous range from the last plain/cmd click (selectAnchor) through this file — same convention as
+  // Files/Cloud Services/Pinned Folders.
+  function selectOnClick(e: React.MouseEvent, path: string) {
+    if (e.shiftKey && selectAnchor) {
+      const paths = files.map((f) => f.path);
+      const a = paths.indexOf(selectAnchor);
+      const b = paths.indexOf(path);
+      if (a !== -1 && b !== -1) {
+        const [start, end] = a < b ? [a, b] : [b, a];
+        setSelected(new Set(paths.slice(start, end + 1)));
+        return;
+      }
+    }
+    if (e.metaKey || e.ctrlKey) {
+      toggleSelect(path);
+    } else {
+      setSelected(new Set([path]));
+    }
+    setSelectAnchor(path);
+  }
+
+  // Spacebar previews the single selected file — image/video only, matching what PreviewModal actually
+  // renders inline now (everything else opens straight in its app via Open in App / double-click).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.code !== 'Space') return;
+      const tag = (document.activeElement?.tagName ?? '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (selected.size !== 1) return;
+      const f = files.find((r) => selected.has(r.path));
+      if (!f) return;
+      const cat = broadCategorize(f.path, f.mimeType);
+      if (cat !== 'image' && cat !== 'video') return;
+      e.preventDefault();
+      setPreviewFile((cur) => (cur ? null : f));
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected, files]);
+
   async function downloadRemote(f: DeviceFileEntry) {
     if (!activeFolder) return;
     const res = await fetch(`${API_BASE}/devices/${device.id}/${apiSegment}/${activeFolder.id}/download?key=${encodeURIComponent(f.path)}`);
@@ -317,7 +295,7 @@ function RemoteBrowser({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = f.path.split('/').pop() ?? f.path;
+    a.download = deviceBasename(f.path);
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -350,7 +328,7 @@ function RemoteBrowser({
 
   async function deleteOne(f: DeviceFileEntry) {
     if (!activeFolder) return;
-    if (!window.confirm(`Delete "${f.path.split('/').pop() ?? f.path}" from ${device.name}? This can't be undone.`)) return;
+    if (!window.confirm(`Delete "${deviceBasename(f.path)}" from ${device.name}? This can't be undone.`)) return;
     const res = await fetch(`${API_BASE}/devices/${device.id}/${apiSegment}/${activeFolder.id}/file?key=${encodeURIComponent(f.path)}`, { method: 'DELETE' });
     if (!res.ok) {
       window.alert("Couldn't delete that file.");
@@ -378,7 +356,7 @@ function RemoteBrowser({
     onClipboardChange({
       kind: 'file',
       action,
-      items: [{ folderId: activeFolder.id, path: f.path, name: f.path.split('/').pop() ?? f.path, deviceId: device.id, mimeType: f.mimeType }],
+      items: [{ folderId: activeFolder.id, path: f.path, name: deviceBasename(f.path), deviceId: device.id, mimeType: f.mimeType }],
     });
   }
 
@@ -395,7 +373,7 @@ function RemoteBrowser({
     const targets = files.filter((f) => selected.has(f.path));
     setCopyingToCloud(false);
     for (const f of targets) {
-      await fetch(`${API_BASE}/devices/${device.id}/folders/${activeFolder.id}/copy-to-cloud`, {
+      await fetch(`${API_BASE}/devices/${device.id}/${apiSegment}/${activeFolder.id}/copy-to-cloud`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: f.path, destProviderId }),
@@ -404,9 +382,14 @@ function RemoteBrowser({
     setSelected(new Set());
   }
 
-  // "copy to cloud" only exists for the cloud-folder proxy route family — it doesn't apply to a file
-  // that's already sitting on a plain local disk, not fetched through a provider.
-  const isMediaCategory = browseMode === 'cloud' && (activeFolder?.id === 'images' || activeFolder?.id === 'videos');
+  // Real server-generated thumbnails + "copy to cloud" both only exist for the MediaStore-category route
+  // family (Android's Local Folders tab, post-repoint) — sync-pairs and a real filesystem folder have
+  // neither, and fall back to Thumbnail's client-side render / hide the action entirely.
+  const isMediaCategory = apiSegment === 'folders' && (activeFolder?.id === 'images' || activeFolder?.id === 'videos');
+  // Delete/Rename aren't implemented server-side for the sync-pairs family on either platform (it's a
+  // read/preview/download surface into what's already synced, not a file manager for it) — hide rather
+  // than offer an action that 404s.
+  const canModify = apiSegment !== 'sync-pairs';
 
   function menuItemsFor(f: DeviceFileEntry) {
     return [
@@ -414,11 +397,11 @@ function RemoteBrowser({
       { label: openWithLabel(f), onClick: () => openInApp(f) },
       { label: 'Download', onClick: () => downloadRemote(f) },
       { label: 'Copy to Clipboard', onClick: () => copyToClipboardOne(f) },
-      { label: 'Rename File', onClick: () => setRenamingFile(f) },
+      ...(canModify ? [{ label: 'Rename File', onClick: () => setRenamingFile(f) }] : []),
       { label: 'Copy', onClick: () => copyOrCut(f, 'copy') },
       { label: 'Cut', onClick: () => copyOrCut(f, 'cut') },
       { divider: true },
-      { label: 'Delete', danger: true, onClick: () => deleteOne(f) },
+      ...(canModify ? [{ label: 'Delete', danger: true, onClick: () => deleteOne(f) }] : []),
       { label: 'Details', onClick: () => setDetailsFile(f) },
     ];
   }
@@ -506,7 +489,7 @@ function RemoteBrowser({
                 <div className="spacer" />
                 <button className="btn small" onClick={bulkDownload}>Download</button>
                 <button className="btn small" onClick={bulkCopyToClipboard}>Copy to Clipboard</button>
-                {browseMode === 'cloud' && (
+                {apiSegment === 'folders' && (
                   <button className="btn small" onClick={() => setCopyingToCloud(true)}>Copy to Cloud Service</button>
                 )}
               </div>
@@ -533,14 +516,20 @@ function RemoteBrowser({
                   <div className="folder-meta">Folder</div>
                 </div>
               ))}
-              {!filesLoading && files.map((f) => {
-                const name = f.path.split('/').pop() ?? f.path;
-                const downloadUrl = `${API_BASE}/devices/${device.id}/${apiSegment}/${activeFolder!.id}/download?key=${encodeURIComponent(f.path)}`;
+              {!filesLoading && activeFolder && files.map((f) => {
+                const name = deviceBasename(f.path);
+                const downloadUrl = `${API_BASE}/devices/${device.id}/${apiSegment}/${activeFolder.id}/download?key=${encodeURIComponent(f.path)}`;
                 const remoteThumbUrl = isMediaCategory
-                  ? `${API_BASE}/devices/${device.id}/${apiSegment}/${activeFolder!.id}/thumbnail?key=${encodeURIComponent(f.path)}`
+                  ? `${API_BASE}/devices/${device.id}/${apiSegment}/${activeFolder.id}/thumbnail?key=${encodeURIComponent(f.path)}`
                   : undefined;
                 return (
-                  <div key={f.path} className="folder-card glass-card" style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setPreviewFile(f)}>
+                  <div
+                    key={f.path}
+                    className={`folder-card glass-card${selected.has(f.path) ? ' selected' : ''}`}
+                    style={{ position: 'relative', cursor: 'pointer' }}
+                    onClick={(e) => selectOnClick(e, f.path)}
+                    onDoubleClick={() => openInApp(f)}
+                  >
                     <input
                       type="checkbox"
                       checked={selected.has(f.path)}
@@ -551,19 +540,19 @@ function RemoteBrowser({
                     <div style={{ position: 'absolute', top: 6, right: 6 }} onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu items={menuItemsFor(f)} />
                     </div>
-                    <div className="folder-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 48 }}>
-                      {/* remoteThumbUrl (cloud Images/Videos categories) uses the provider's own cheap
-                          pre-generated thumbnail; everything else (local folders, and non-media cloud
-                          categories like Documents) renders a real client-side preview straight off the
-                          download route instead of a generic file-type icon. */}
-                      <Thumbnail
-                        fileKey={f.path}
-                        name={name}
-                        size={f.size}
-                        thumbnailUrl={remoteThumbUrl}
-                        directUrl={remoteThumbUrl ? undefined : downloadUrl}
-                      />
-                    </div>
+                    {/* remoteThumbUrl (cloud Images/Videos categories) uses the provider's own cheap
+                        pre-generated thumbnail; everything else (local folders, and non-media cloud
+                        categories like Documents) renders a real client-side preview straight off the
+                        download route instead of a generic file-type icon. Rendered as a direct card
+                        child (no fixed-height wrapper) same as FilesView/CloudServicesView/etc, so it
+                        gets the full-size preview area instead of being squeezed into a small icon box. */}
+                    <Thumbnail
+                      fileKey={f.path}
+                      name={name}
+                      size={f.size}
+                      thumbnailUrl={remoteThumbUrl}
+                      directUrl={remoteThumbUrl ? undefined : downloadUrl}
+                    />
                     <div className="folder-name" title={name}>{name}</div>
                     <div className="folder-meta">{formatBytes(f.size)}</div>
                   </div>
@@ -575,12 +564,26 @@ function RemoteBrowser({
       )}
 
       {previewFile && activeFolder && (
-        <DevicePreviewModal device={device} folderId={activeFolder.id} apiSegment={apiSegment} file={previewFile} onClose={() => setPreviewFile(null)} />
+        <PreviewModal
+          file={{
+            source: { kind: 'device', deviceId: device.id, apiSegment, folderId: activeFolder.id },
+            key: previewFile.path,
+            name: deviceBasename(previewFile.path),
+            size: previewFile.size,
+            provider: device.name,
+            folderName: activeFolder.name,
+            modifiedAt: previewFile.modifiedAt,
+            hash: previewFile.hash,
+          }}
+          apiBase={API_BASE}
+          onClose={() => setPreviewFile(null)}
+          onOpenInApp={() => openInApp(previewFile)}
+        />
       )}
       {detailsFile && <DeviceDetailsModal file={detailsFile} onClose={() => setDetailsFile(null)} />}
       {renamingFile && (
         <RenameModal
-          currentName={renamingFile.path.split('/').pop() ?? renamingFile.path}
+          currentName={deviceBasename(renamingFile.path)}
           onClose={() => setRenamingFile(null)}
           onConfirm={(newName) => {
             const target = renamingFile;
@@ -696,6 +699,15 @@ export function DevicesView({ clipboard, onClipboardChange }: { clipboard: Clipb
     refresh();
   }
 
+  async function toggleUniversalClipboard(d: PairedDeviceInfo) {
+    await fetch(`${API_BASE}/devices/${d.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ universalClipboardEnabled: !d.universalClipboardEnabled }),
+    });
+    refresh();
+  }
+
   if (browsing) {
     return <RemoteBrowser device={browsing} onBack={() => setBrowsing(null)} onClipboardChange={onClipboardChange} />;
   }
@@ -734,6 +746,10 @@ export function DevicesView({ clipboard, onClipboardChange }: { clipboard: Clipb
                   { label: 'Browse Files', onClick: () => d.online && setBrowsing(d) },
                   { label: 'Rename', onClick: () => setRenaming(d) },
                   { label: 'Test Connection', onClick: () => testConnection(d.id) },
+                  // Universal Clipboard is THIS device's own outbound toggle for that specific peer — not
+                  // something to limit to desktop-to-desktop pairs. A prior platform gate here (hidden for
+                  // Android) root-caused "phone clipboard toggle has no effect from the Mac/Windows side."
+                  { label: `Universal Clipboard: ${d.universalClipboardEnabled ? 'On ✓' : 'Off'}`, onClick: () => toggleUniversalClipboard(d) },
                   { divider: true },
                   { label: 'Unpair', danger: true, onClick: () => unpair(d.id) },
                 ]}

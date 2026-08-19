@@ -65,9 +65,10 @@ function regQueryValueNames(keyPath: string): string[] {
 
 // REG_EXPAND_SZ values carry literal %VAR% placeholders the reader is expected to expand — reg.exe
 // doesn't do this for us, so a path like "%ProgramFiles(x86)%\Windows Media Player\wmplayer.exe" needs
-// this before fs.existsSync means anything.
+// this before fs.existsSync means anything. Handle both %VAR% and %VAR\ patterns.
 function expandEnvVars(value: string): string {
-  return value.replace(/%([^%]+)%/g, (match, name) => process.env[name] ?? match);
+  return value.replace(/%([^%]+)%/g, (match, name) => process.env[name] ?? match)
+    .replace(/%([^%\\]+)(?=\\)/g, (match, name) => process.env[name] ?? match);
 }
 
 function extractExePath(command: string): string | null {

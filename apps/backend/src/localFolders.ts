@@ -108,8 +108,10 @@ export function removeCustomFolder(id: string): void {
  * scoped to whatever this device is actually exposing right now instead of a fixed list. */
 export function isAllowedLocalFolderPath(candidate: string): boolean {
   const resolved = path.resolve(candidate);
+  // Normalize path separators for cross-platform comparison
+  const normalizedResolved = resolved.replace(/\\/g, '/');
   return listLocalFolders().some((f) => {
-    const root = path.resolve(f.path);
-    return resolved === root || resolved.startsWith(root + path.sep);
+    const root = path.resolve(f.path).replace(/\\/g, '/');
+    return normalizedResolved === root || normalizedResolved.startsWith(root + '/');
   });
 }
