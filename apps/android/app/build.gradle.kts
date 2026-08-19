@@ -68,7 +68,7 @@ dependencies {
     // legacy 16-bit request-code check rejects the random codes the modern Activity Result API generates
     // ("Can only use lower 16 bits for requestCode"), crashing on ANY permission-request launch. Force a
     // current version.
-    implementation("androidx.fragment:fragment-ktx:1.8.2")
+    implementation("androidx.fragment:fragment-ktx:1.9.0")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
