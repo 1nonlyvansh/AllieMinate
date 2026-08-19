@@ -1,0 +1,112 @@
+---
+import Icon from './Icon.astro';
+
+const STEPS = [
+  { icon: 'cloud', title: 'Connect Your Clouds', desc: 'Add your cloud storage accounts using secure OAuth or provider credentials.' },
+  { icon: 'devices', title: 'Add Your Devices', desc: 'Install AllieMinate on your devices and sign in to your workspace.' },
+  { icon: 'folder-tree', title: 'Access & Manage Files', desc: 'Browse and manage all your files from one unified workspace.' },
+  { icon: 'sync', title: 'Transfer with Ease', desc: 'Move files across clouds and devices quickly and securely.' },
+  { icon: 'shield', title: 'Your Data Stays Yours', desc: 'Your files never touch our servers. You stay in full control.' },
+];
+---
+<section class="section process-steps">
+  <div class="wrap">
+    <h2 class="section-title" style="text-align:center">How AllieMinate Works</h2>
+    <p class="process-steps-sub">Simple. Secure. Seamless.</p>
+
+    <div class="process-steps-row" data-reveal-group>
+      {STEPS.map((s, i) => (
+        <div class="process-step reveal">
+          <div class="process-step-icon">
+            <Icon name={s.icon} size={20} />
+            <span class="process-step-num">{i + 1}</span>
+          </div>
+          <h3>{s.title}</h3>
+          <p>{s.desc}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .process-steps-sub {
+    text-align: center;
+    color: var(--text-secondary);
+    margin-top: -8px;
+    margin-bottom: var(--space-4);
+  }
+  .process-steps-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: var(--space-2);
+    position: relative;
+  }
+  .process-steps-row::before {
+    content: '';
+    position: absolute;
+    top: 26px;
+    left: 10%;
+    right: 10%;
+    height: 0;
+    border-top: 2px dashed var(--glass-border);
+    z-index: 0;
+  }
+  .process-step {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+  }
+  .process-step-icon {
+    position: relative;
+    width: 52px;
+    height: 52px;
+    margin: 0 auto var(--space-2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--glass-bg-strong);
+    border: 1px solid var(--glass-border);
+    color: var(--accent);
+  }
+  .process-step-num {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .process-step h3 {
+    font-size: 14.5px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .process-step p {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  @media (max-width: 1023px) {
+    .process-steps-row {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .process-steps-row::before {
+      display: none;
+    }
+  }
+  @media (max-width: 480px) {
+    .process-steps-row {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

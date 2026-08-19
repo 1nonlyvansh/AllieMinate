@@ -1,15 +1,266 @@
 ---
 import Base from '../layouts/Base.astro';
 import Nav from '../components/Nav.astro';
-import PageHeader from '../components/PageHeader.astro';
-import PlatformSection from '../components/PlatformSection.astro';
+import PageHero from '../components/PageHero.astro';
+import PlatformGlyph from '../components/PlatformGlyph.astro';
+import AppMockup from '../components/AppMockup.astro';
+import ComparisonTable from '../components/ComparisonTable.astro';
+import Icon from '../components/Icon.astro';
+import MacDevice from '../components/devices/MacDevice.astro';
+import WindowsDevice from '../components/devices/WindowsDevice.astro';
+import AndroidDevice from '../components/devices/AndroidDevice.astro';
 import Footer from '../components/Footer.astro';
+import platforms from '../data/platforms.json';
+
+const CHIPS = [
+  { icon: 'devices', title: 'Native Experience', desc: 'Built natively for each platform for the best performance.' },
+  { icon: 'shield', title: 'Consistent & Secure', desc: 'End-to-end secure experience across all your devices.' },
+  { icon: 'sync', title: 'Always in Sync', desc: 'Seamless sync of files, clouds, and activity across devices.' },
+];
+
+const DESCRIPTIONS: Record<string, string> = {
+  mac: 'A powerful native macOS app with a beautiful interface, deep system integration, and lightning-fast performance.',
+  windows: 'Designed for Windows 10 and 11. Fast, secure, and built to fit right into your workflow.',
+  android: 'Take AllieMinate with you. Access your files, clouds, and transfers on the go.',
+};
 ---
 <Base title="Platforms — AllieMinate" description="AllieMinate on macOS, Windows, and Android — what's supported on each, and how to install." path="/platforms">
   <Nav />
   <main id="main">
-    <PageHeader eyebrow="Supported Platforms" title="macOS, Windows, and Android." intro="One app, three real installers. None are code-signed with a paid certificate yet — see the note on each platform for the one-time warning you'll see on first install." />
-    <PlatformSection />
+    <PageHero
+      eyebrow="All Your Clouds. All Your Devices. One Workspace."
+      title="AllieMinate on Every Platform"
+      description="AllieMinate is available on macOS, Windows, and Android. A native experience on every platform, designed to keep your files, clouds, and devices perfectly in sync."
+      chips={CHIPS}
+    />
+
+    <section class="section platform-tabs-section">
+      <div class="wrap">
+        <div class="platform-tab-buttons" role="tablist" aria-label="Choose a platform">
+          {platforms.map((p, i) => (
+            <button class="platform-tab-btn" data-tab={p.id} role="tab" aria-selected={i === 0 ? 'true' : 'false'}>
+              <PlatformGlyph platform={p.device} size={22} />
+              {p.name}
+            </button>
+          ))}
+        </div>
+
+        {platforms.map((p, i) => (
+          <div class="platform-panel" id={p.id} data-panel={p.id} hidden={i !== 0}>
+            <div class="platform-panel-visual">
+              <AppMockup size="compact" />
+            </div>
+            <div class="platform-panel-copy">
+              <h2><PlatformGlyph platform={p.device} size={30} /> AllieMinate <span>for {p.name}</span></h2>
+              <p>{DESCRIPTIONS[p.device]}</p>
+              <ul class="platform-panel-list">
+                {p.capabilities.map((c) => (
+                  <li><Icon name="check" size={16} /> {c}</li>
+                ))}
+              </ul>
+              <a class="btn btn-primary" href={p.downloadHref}>{p.downloadLabel}</a>
+              <span class="platform-panel-req">{p.badge}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <ComparisonTable />
+
+    <section class="section sync-band">
+      <div class="wrap sync-band-inner">
+        <div class="sync-band-copy">
+          <h2 class="section-title">Everything in Sync</h2>
+          <p>AllieMinate keeps your clouds, files and devices connected. Make a change on one device and see it everywhere.</p>
+        </div>
+        <div class="sync-band-visual" aria-hidden="true">
+          <div class="sync-node"><MacDevice size={56} /><span>macOS</span></div>
+          <svg class="sync-line" viewBox="0 0 60 20"><path class="connection-path" d="M2 2 L58 2" stroke="var(--accent)" stroke-opacity="0.5" stroke-width="1.5" stroke-dasharray="4 5" stroke-linecap="round" /></svg>
+          <div class="sync-node sync-node-center"><img src="/images/logo.svg" alt="" width="34" height="34" /></div>
+          <svg class="sync-line" viewBox="0 0 60 20"><path class="connection-path" d="M2 2 L58 2" stroke="var(--accent)" stroke-opacity="0.5" stroke-width="1.5" stroke-dasharray="4 5" stroke-linecap="round" /></svg>
+          <div class="sync-node"><WindowsDevice size={56} /><span>Windows</span></div>
+        </div>
+      </div>
+    </section>
   </main>
   <Footer />
 </Base>
+
+<script>
+  const buttons = document.querySelectorAll<HTMLButtonElement>('.platform-tab-btn');
+  const panels = document.querySelectorAll<HTMLElement>('.platform-panel');
+
+  function activate(id: string) {
+    buttons.forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === id)));
+    panels.forEach((p) => {
+      p.hidden = p.dataset.panel !== id;
+    });
+  }
+
+  buttons.forEach((b) => {
+    b.addEventListener('click', () => {
+      if (b.dataset.tab) {
+        activate(b.dataset.tab);
+        history.replaceState(null, '', `#${b.dataset.tab}`);
+      }
+    });
+  });
+
+  const initial = window.location.hash.replace('#', '');
+  if (initial && document.getElementById(initial)?.classList.contains('platform-panel')) {
+    activate(initial);
+  }
+</script>
+
+<style>
+  .platform-tab-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: var(--space-4);
+    flex-wrap: wrap;
+  }
+  .platform-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: border-color 0.15s var(--ease-out), color 0.15s var(--ease-out);
+  }
+  .platform-tab-btn[aria-selected='true'] {
+    border-color: var(--accent);
+    color: var(--text);
+    background: var(--glass-bg-strong);
+  }
+  .platform-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-5);
+    align-items: center;
+  }
+  .platform-panel[hidden] {
+    display: none;
+  }
+  .platform-panel-copy h2 {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 26px;
+    font-weight: 700;
+  }
+  .platform-panel-copy h2 span {
+    color: var(--accent-text);
+  }
+  .platform-panel-copy p {
+    margin-top: var(--space-2);
+    color: var(--text-secondary);
+    font-size: 15px;
+    line-height: 1.6;
+    max-width: 440px;
+  }
+  .platform-panel-list {
+    list-style: none;
+    padding: 0;
+    margin: var(--space-3) 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .platform-panel-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 14px;
+    color: var(--text);
+  }
+  .platform-panel-list :global(svg) {
+    color: var(--online);
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .platform-panel-req {
+    display: block;
+    margin-top: var(--space-2);
+    font-size: 12.5px;
+    color: var(--text-tertiary);
+  }
+
+  .sync-band-inner {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--space-6);
+    align-items: center;
+    padding: var(--space-4);
+    border-radius: var(--r-lg);
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg-soft);
+  }
+  .sync-band-copy p {
+    margin-top: var(--space-2);
+    color: var(--text-secondary);
+    font-size: 14.5px;
+    max-width: 420px;
+  }
+  .sync-band-visual {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-secondary);
+  }
+  .sync-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+  }
+  .sync-node-center {
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--r-lg);
+    background: var(--glass-bg-strong);
+    border: 1px solid var(--glass-border);
+  }
+  .sync-line {
+    width: 48px;
+    height: 20px;
+  }
+
+  @media (max-width: 1023px) {
+    .platform-panel {
+      grid-template-columns: 1fr;
+      text-align: center;
+    }
+    .platform-panel-copy h2,
+    .platform-panel-list li {
+      justify-content: center;
+    }
+    .platform-panel-copy p {
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .sync-band-inner {
+      grid-template-columns: 1fr;
+      text-align: center;
+    }
+    .sync-band-visual {
+      justify-content: center;
+    }
+  }
+  @media (max-width: 480px) {
+    .sync-band-visual {
+      display: none;
+    }
+  }
+</style>

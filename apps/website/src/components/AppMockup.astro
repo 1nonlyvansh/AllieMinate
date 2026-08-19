@@ -1,0 +1,197 @@
+---
+// Decorative "what the app looks like" panel — no real product screenshots exist in this repo
+// yet (see README's Screenshots section), so this is styled illustration, same honesty bar as
+// the hand-drawn device SVGs in components/devices/: real cloud-provider names and real nav
+// labels (Files/Recents/Favorites/Transfers match the actual app's sidebar), placeholder file
+// rows, not a claim of an actual screenshot.
+import providers from '../data/providers.json';
+
+interface Props {
+  size?: 'hero' | 'compact';
+}
+const { size = 'hero' } = Astro.props;
+
+const NAV = ['All Files', 'Recents', 'Favorites', 'Transfers'];
+const FILES = [
+  { name: 'Project Proposal.pdf', cloud: 'Google Drive', modified: 'Today, 10:30 AM' },
+  { name: 'Design Assets', cloud: 'OneDrive', modified: 'Today, 8:12 AM' },
+  { name: 'Budget.xlsx', cloud: 'Google Drive', modified: 'Yesterday, 4:21 PM' },
+  { name: 'Marketing Plan.docx', cloud: 'pCloud', modified: 'Yesterday, 2:10 PM' },
+  { name: 'Backup.zip', cloud: 'Backblaze B2', modified: 'Aug 13, 2024' },
+];
+---
+<div class={`app-mockup app-mockup-${size}`} aria-hidden="true">
+  <div class="app-mockup-chrome">
+    <span></span><span></span><span></span>
+  </div>
+  <div class="app-mockup-body">
+    <div class="app-mockup-sidebar">
+      <div class="app-mockup-brand">AllieMinate</div>
+      <div class="app-mockup-nav">
+        {NAV.map((n, i) => <div class={`app-mockup-navitem ${i === 0 ? 'is-active' : ''}`}>{n}</div>)}
+      </div>
+      <div class="app-mockup-clouds-label">Clouds</div>
+      <div class="app-mockup-clouds">
+        {providers.slice(0, 5).map((p) => (
+          <div class="app-mockup-cloud">
+            <img src={p.logo} alt="" width="14" height="14" loading="lazy" />
+            <span>{p.name}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+    <div class="app-mockup-main">
+      <div class="app-mockup-toolbar">
+        <span class="app-mockup-search">Search files…</span>
+      </div>
+      <div class="app-mockup-table">
+        <div class="app-mockup-row app-mockup-row-head">
+          <span>Name</span><span>Cloud</span><span>Modified</span>
+        </div>
+        {FILES.map((f) => (
+          <div class="app-mockup-row">
+            <span>{f.name}</span><span>{f.cloud}</span><span>{f.modified}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .app-mockup {
+    background: var(--glass-bg-strong);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--r-lg);
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+    box-shadow: var(--shadow-modal);
+    overflow: hidden;
+    width: 100%;
+  }
+  .app-mockup-hero {
+    max-width: 560px;
+  }
+  .app-mockup-compact {
+    max-width: 420px;
+  }
+  .app-mockup-chrome {
+    display: flex;
+    gap: 6px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--glass-border);
+  }
+  .app-mockup-chrome span {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--text-tertiary);
+  }
+  .app-mockup-body {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+  }
+  .app-mockup-sidebar {
+    border-right: 1px solid var(--glass-border);
+    padding: 12px 10px;
+  }
+  .app-mockup-brand {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+  }
+  .app-mockup-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 14px;
+  }
+  .app-mockup-navitem {
+    font-size: 10.5px;
+    color: var(--text-secondary);
+    padding: 5px 7px;
+    border-radius: 6px;
+  }
+  .app-mockup-navitem.is-active {
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-weight: 600;
+  }
+  .app-mockup-clouds-label {
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-tertiary);
+    margin-bottom: 6px;
+  }
+  .app-mockup-clouds {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .app-mockup-cloud {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    color: var(--text-secondary);
+  }
+  .app-mockup-cloud img {
+    border-radius: 3px;
+  }
+  .app-mockup-main {
+    padding: 12px 14px;
+    min-width: 0;
+  }
+  .app-mockup-toolbar {
+    margin-bottom: 10px;
+  }
+  .app-mockup-search {
+    display: inline-block;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    background: var(--glass-bg-soft);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    padding: 5px 10px;
+  }
+  .app-mockup-table {
+    display: flex;
+    flex-direction: column;
+  }
+  .app-mockup-row {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr 1fr;
+    gap: 8px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--glass-border);
+    font-size: 10.5px;
+    color: var(--text-secondary);
+  }
+  .app-mockup-row span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .app-mockup-row-head {
+    color: var(--text-tertiary);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+  }
+  .app-mockup-row:not(.app-mockup-row-head) span:first-child {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  @media (max-width: 480px) {
+    .app-mockup-body {
+      grid-template-columns: 1fr;
+    }
+    .app-mockup-sidebar {
+      display: none;
+    }
+  }
+</style>

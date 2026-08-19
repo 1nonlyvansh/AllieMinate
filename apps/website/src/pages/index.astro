@@ -2,79 +2,28 @@
 import Base from '../layouts/Base.astro';
 import Nav from '../components/Nav.astro';
 import Hero from '../components/Hero.astro';
-import Intro from '../components/Intro.astro';
-import Icon from '../components/Icon.astro';
+import FeatureGrid from '../components/FeatureGrid.astro';
+import GoogleAccessSection from '../components/GoogleAccessSection.astro';
+import DownloadCards from '../components/DownloadCards.astro';
 import GitHubSection from '../components/GitHubSection.astro';
-import FinalCTA from '../components/FinalCTA.astro';
 import Footer from '../components/Footer.astro';
 
-const SECTIONS = [
-  { href: '/product', icon: 'cloud', title: 'Product', desc: 'Cloud aggregation, Sync Pairs, Nearby Share, Universal Clipboard — how it all actually works.' },
-  { href: '/platforms', icon: 'devices', title: 'Platforms', desc: 'macOS, Windows, and Android — what’s supported on each, and how to install.' },
-  { href: '/security', icon: 'shield', title: 'Security', desc: 'What protects you, and what doesn’t. Stated plainly, limitations included.' },
-  { href: '/download', icon: 'tray', title: 'Download', desc: 'Every installer, one page. Version v2.8.8.' },
+const WHAT_IT_DOES = [
+  { icon: 'cloud', title: 'Connect Your Clouds', desc: 'Add and manage multiple cloud storage accounts in one secure workspace.' },
+  { icon: 'devices', title: 'Access Across Devices', desc: 'Use AllieMinate on macOS, Windows, and Android to access your files anytime, anywhere.' },
+  { icon: 'folder-tree', title: 'Manage Your Files', desc: 'Browse, upload, download, rename, and organize files across all your connected clouds.' },
+  { icon: 'sync', title: 'Transfer with Ease', desc: 'Move files between clouds and devices quickly without third-party servers in between.' },
+  { icon: 'shield', title: 'Your Data, Your Control', desc: 'Your data stays with your cloud providers. We don’t store your files on our servers.', tone: 'green' },
 ];
 ---
 <Base>
   <Nav />
   <main id="main">
     <Hero />
-    <Intro />
-
-    <section class="section">
-      <div class="wrap">
-        <div class="grid-2 explore-grid" data-reveal-group>
-          {SECTIONS.map((s) => (
-            <a class="card explore-card reveal" href={s.href}>
-              <Icon name={s.icon} size={24} />
-              <div>
-                <div class="explore-title">{s.title}</div>
-                <div class="explore-desc">{s.desc}</div>
-              </div>
-              <span class="explore-arrow" aria-hidden="true">→</span>
-            </a>
-          ))}
-        </div>
-      </div>
-    </section>
-
+    <FeatureGrid eyebrow="Features" title="What AllieMinate Does" items={WHAT_IT_DOES} columns={5} />
+    <GoogleAccessSection />
+    <DownloadCards />
     <GitHubSection />
-    <FinalCTA />
   </main>
   <Footer />
 </Base>
-
-<style>
-  .explore-grid {
-    gap: var(--space-2);
-  }
-  .explore-card {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-3);
-    text-decoration: none;
-    color: var(--accent);
-    transition: transform 0.2s var(--ease-out), border-color 0.2s var(--ease-out);
-  }
-  .explore-card:hover {
-    transform: translateY(-3px);
-    border-color: var(--accent);
-  }
-  .explore-title {
-    color: var(--text);
-    font-weight: 600;
-    font-size: 16px;
-  }
-  .explore-desc {
-    color: var(--text-secondary);
-    font-size: 13.5px;
-    margin-top: 4px;
-    line-height: 1.5;
-  }
-  .explore-arrow {
-    margin-left: auto;
-    color: var(--text-tertiary);
-    font-size: 18px;
-  }
-</style>

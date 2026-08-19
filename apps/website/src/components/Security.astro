@@ -21,7 +21,9 @@ const limitations = [
     <div class="sec-grid" data-reveal-group>
       {pillars.map((p) => (
         <div class="card sec-card reveal">
-          <Icon name={p.icon} size={22} />
+          <div class="sec-card-icon">
+            <Icon name={p.icon} size={22} />
+          </div>
           <h3>{p.title}</h3>
           <p>{p.desc}</p>
         </div>
@@ -50,7 +52,17 @@ const limitations = [
   }
   .sec-card {
     padding: var(--space-2);
+  }
+  .sec-card-icon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--r-md);
+    background: var(--accent-soft);
     color: var(--accent);
+    margin-bottom: var(--space-2);
   }
   .sec-card h3 {
     color: var(--text);

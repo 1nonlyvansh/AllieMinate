@@ -1,4 +1,6 @@
 ---
+import StarButton from './StarButton.astro';
+
 const PAGES = [
   { href: '/product', label: 'Product' },
   { href: '/platforms', label: 'Platforms' },
@@ -17,10 +19,10 @@ const isActive = (href: string) => path === href || path === href + '/';
 
     <nav class="nav-links" aria-label="Primary">
       {PAGES.map((p) => <a href={p.href} aria-current={isActive(p.href) ? 'page' : undefined}>{p.label}</a>)}
-      <a href="https://github.com/1nonlyvansh/AllieMinate" target="_blank" rel="noopener">GitHub</a>
     </nav>
 
     <div class="nav-cta">
+      <StarButton />
       <a class="btn btn-primary" href="/download" data-primary-download>Download</a>
     </div>
 
@@ -31,7 +33,7 @@ const isActive = (href: string) => path === href || path === href + '/';
 
   <div class="nav-mobile" id="nav-mobile" hidden>
     {PAGES.map((p) => <a href={p.href} aria-current={isActive(p.href) ? 'page' : undefined}>{p.label}</a>)}
-    <a href="https://github.com/1nonlyvansh/AllieMinate" target="_blank" rel="noopener">GitHub</a>
+    <StarButton />
   </div>
 </header>
 
@@ -42,11 +44,11 @@ const isActive = (href: string) => path === href || path === href + '/';
     left: 0;
     right: 0;
     z-index: 100;
-    background: transparent;
-    transition: background 0.25s ease, border-color 0.25s ease, backdrop-filter 0.25s ease;
-    border-bottom: 1px solid transparent;
-  }
-  .nav.nav-solid {
+    /* Was transparent-until-scrolled (toggled via a .nav-solid class added by JS past 50px of
+       scroll) — always solid now. Content sitting right below the fixed nav (the hero heading,
+       or anything a visitor scrolls back up under) was showing straight through it before any
+       scroll happened, and relying on a scroll listener for legibility is exactly the kind of
+       JS-timing fragility that's bitten this site before. Always-on glass, no conditional. */
     background: color-mix(in srgb, var(--glass-bg-soft) 92%, transparent);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
@@ -72,6 +74,12 @@ const isActive = (href: string) => path === href || path === href + '/';
     display: flex;
     gap: var(--space-3);
     font-size: 14.5px;
+  }
+  .nav-cta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
   }
   .nav-links a {
     text-decoration: none;

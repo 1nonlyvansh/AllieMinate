@@ -15,6 +15,7 @@ export interface NearbyPeer {
   platform: string;
   host: string;
   lastSeen: number;
+  nearbyShareEnabled: boolean;
 }
 
 const peers = new Map<string, NearbyPeer>();
@@ -30,16 +31,14 @@ export function startNearbyDiscovery(appPort: number): void {
       if (data?.type !== 'alliminate-nearby' || typeof data.id !== 'string') return;
       const me = getDeviceIdentity();
       if (data.id === me.id) return; // our own beacon, bounced back by broadcast
-      if (data.nearbyShareEnabled === false) {
-        peers.delete(data.id);
-        return;
-      }
+      const nearbyShareEnabled = data.nearbyShareEnabled === true;
       peers.set(data.id, {
         id: data.id,
         name: typeof data.name === 'string' ? data.name : 'Unknown Device',
         platform: typeof data.platform === 'string' ? data.platform : 'unknown',
         host: `${rinfo.address}:${typeof data.port === 'number' ? data.port : appPort}`,
         lastSeen: Date.now(),
+        nearbyShareEnabled,
       });
     } catch {
       // this socket takes unauthenticated input from anything on the LAN — malformed/hostile packets are
@@ -49,7 +48,7 @@ export function startNearbyDiscovery(appPort: number): void {
 
   socket.on('error', (err) => console.error('nearby discovery socket error:', err.message));
 
-  socket.bind(NEARBY_PORT, () => {
+  socket.bind(NEARBY_PORT, '0.0.0.0', () => {
     socket?.setBroadcast(true);
   });
 

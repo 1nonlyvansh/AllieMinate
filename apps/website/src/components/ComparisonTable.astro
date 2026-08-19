@@ -1,0 +1,104 @@
+---
+// Grounded in the real per-platform differences already documented in data/platforms.json and
+// docs/features/overview.md — not a blanket checkmark table. Android can't connect clouds
+// directly (browses via a paired desktop's connected accounts), Universal Clipboard is
+// desktop→phone one-way, and Windows App Lock has no Windows Hello yet (falls back to app PIN).
+const ROWS = [
+  { feature: 'Cloud Aggregation', mac: true, windows: true, android: 'partial', androidNote: 'via a paired desktop' },
+  { feature: 'Sync Pairs', mac: true, windows: true, android: true },
+  { feature: 'Nearby Share', mac: true, windows: true, android: true },
+  { feature: 'Universal Clipboard', mac: true, windows: true, android: 'partial', androidNote: 'receive only' },
+  { feature: 'Menu Bar / Tray Access', mac: true, windows: true, android: false },
+  { feature: 'App Lock', mac: true, windows: true, android: true },
+];
+---
+<section class="section comparison-section">
+  <div class="wrap">
+    <h2 class="section-title" style="text-align:center">One Experience. All Platforms.</h2>
+
+    <div class="comparison-table-wrap">
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>macOS</th>
+            <th>Windows</th>
+            <th>Android</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ROWS.map((r) => (
+            <tr>
+              <td class="comparison-feature">{r.feature}</td>
+              <td>{r.mac ? '✓' : '—'}</td>
+              <td>{r.windows ? '✓' : '—'}</td>
+              <td>
+                {r.android === true ? '✓' : r.android === 'partial' ? <span class="comparison-partial" title={r.androidNote}>✓*</span> : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    <p class="comparison-footnote">* Partial support — hover for detail. Full breakdown in the <a href="https://github.com/1nonlyvansh/AllieMinate/blob/main/README.md#compatibility-matrix" target="_blank" rel="noopener">compatibility matrix</a>.</p>
+  </div>
+</section>
+
+<style>
+  .comparison-table-wrap {
+    overflow-x: auto;
+    border-radius: var(--r-lg);
+    border: 1px solid var(--glass-border);
+  }
+  .comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+  }
+  .comparison-table th,
+  .comparison-table td {
+    padding: 14px 18px;
+    text-align: center;
+    font-size: 14px;
+    border-bottom: 1px solid var(--glass-border);
+  }
+  .comparison-table th {
+    color: var(--text-secondary);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+  }
+  .comparison-feature {
+    text-align: left;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .comparison-table td:not(.comparison-feature) {
+    color: var(--online);
+    font-weight: 700;
+  }
+  .comparison-partial {
+    color: var(--warning);
+    cursor: help;
+    border-bottom: 1px dotted currentColor;
+  }
+  .comparison-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+  .comparison-footnote {
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--text-tertiary);
+    margin-top: var(--space-2);
+  }
+  .comparison-footnote a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .comparison-footnote a:hover {
+    text-decoration: underline;
+  }
+</style>

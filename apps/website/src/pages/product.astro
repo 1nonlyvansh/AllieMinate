@@ -1,18 +1,59 @@
 ---
 import Base from '../layouts/Base.astro';
 import Nav from '../components/Nav.astro';
-import PageHeader from '../components/PageHeader.astro';
+import PageHero from '../components/PageHero.astro';
+import FeatureGrid from '../components/FeatureGrid.astro';
+import ProcessSteps from '../components/ProcessSteps.astro';
+import CloudProviderStrip from '../components/CloudProviderStrip.astro';
+import FinalCTA from '../components/FinalCTA.astro';
 import CloudProviders from '../components/CloudProviders.astro';
 import CrossDevice from '../components/CrossDevice.astro';
 import FileTransfer from '../components/FileTransfer.astro';
 import SyncSection from '../components/SyncSection.astro';
 import FeatureExplorer from '../components/FeatureExplorer.astro';
 import Footer from '../components/Footer.astro';
+
+const CHIPS = [
+  { icon: 'devices', title: 'Cross-platform', desc: 'macOS, Windows, Android' },
+  { icon: 'cloud', title: 'Multiple Clouds', desc: 'Connect the clouds you already use' },
+  { icon: 'shield', title: 'Your Data, Your Control', desc: 'We don’t store your files or data' },
+];
+
+const POWERFUL_FEATURES = [
+  { icon: 'cloud', title: 'Connect Multiple Clouds', desc: 'Add and manage multiple cloud storage accounts like Google Drive, OneDrive, Backblaze B2, MEGA, pCloud and more.' },
+  { icon: 'devices', title: 'Access Across Devices', desc: 'Use AllieMinate on macOS, Windows, and Android to access your files anytime, anywhere.' },
+  { icon: 'folder-tree', title: 'Unified File Management', desc: 'Browse, upload, download, move, rename, and organize files across all your connected clouds.' },
+  { icon: 'sync', title: 'Seamless Transfers', desc: 'Move files between clouds and devices quickly without routing through our servers.' },
+  { icon: 'shield', title: 'Your Data, Your Control', desc: 'AllieMinate never stores your files. We act as a secure bridge between your clouds and devices.', tone: 'green' },
+  { icon: 'shield', title: 'Secure by Design', desc: 'OAuth 2.0 authentication, encrypted connections, and industry-standard security practices.' },
+  { icon: 'bell', title: 'Smart Notifications', desc: 'Get real-time updates on transfers, syncs, and important activity across your workspace.' },
+  { icon: 'palette', title: 'Clean & Modern UI', desc: 'A beautiful, intuitive interface designed for productivity and focus.' },
+];
 ---
 <Base title="Product — AllieMinate" description="Cloud aggregation, device pairing, Sync Pairs, Nearby Share, and Universal Clipboard — what AllieMinate actually does." path="/product">
   <Nav />
   <main id="main">
-    <PageHeader eyebrow="Product" title="Every cloud. Every device. One app." intro="Cloud aggregation across six providers, plus direct device-to-device sync, transfer, and clipboard — no cloud relay for any of it." />
+    <PageHero
+      eyebrow="All Your Clouds. All Your Devices. One Workspace."
+      title="AllieMinate Product"
+      description="AllieMinate brings all your cloud storage and devices together into one powerful workspace. Manage, access, and move your files seamlessly across clouds and devices — securely and privately."
+      chips={CHIPS}
+    />
+
+    <FeatureGrid eyebrow="Features" title="Powerful Features" items={POWERFUL_FEATURES} columns={4} />
+    <ProcessSteps />
+
+    <section class="section">
+      <div class="wrap">
+        <h2 class="section-title" style="text-align:center">Supported Cloud Providers</h2>
+        <div style="display:flex;justify-content:center;margin-top:var(--space-3)">
+          <CloudProviderStrip />
+        </div>
+      </div>
+    </section>
+
+    <FinalCTA />
+
     <CloudProviders />
     <CrossDevice />
     <FileTransfer />

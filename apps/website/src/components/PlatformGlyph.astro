@@ -1,0 +1,52 @@
+---
+// Small colored platform badge — same real glyph paths as devices/MacDevice.astro,
+// WindowsDevice.astro, AndroidDevice.astro (Apple/Windows/Android platform-indicator
+// pictograms), just at badge scale with a colored backing shape instead of full device art.
+interface Props {
+  platform: 'mac' | 'windows' | 'android';
+  size?: number;
+  class?: string;
+}
+const { platform, size = 28, class: className = '' } = Astro.props;
+
+const CONFIG = {
+  mac: { shape: 'circle', bg: '#8e8e93', label: 'macOS' },
+  windows: { shape: 'square', bg: '#0067c0', label: 'Windows' },
+  android: { shape: 'circle', bg: '#3ddc84', label: 'Android' },
+};
+const { shape, bg, label } = CONFIG[platform];
+---
+<span
+  class={`platform-glyph ${className}`}
+  style={`width:${size}px;height:${size}px;background:${bg};border-radius:${shape === 'circle' ? '50%' : '30%'}`}
+  role="img"
+  aria-label={label}
+>
+  {platform === 'mac' && (
+    <svg viewBox="0 0 24 24" fill="#fff" width="58%" height="58%">
+      <path d="M18.71,19.5C17.88,20.74 17,21.95 15.66,21.97C14.32,22 13.89,21.18 12.37,21.18C10.84,21.18 10.37,21.95 9.1,22C7.79,22.05 6.8,20.68 5.96,19.47C4.25,17 2.94,12.45 4.7,9.39C5.57,7.87 7.13,6.91 8.82,6.88C10.1,6.86 11.32,7.75 12.11,7.75C12.89,7.75 14.37,6.68 15.92,6.84C16.57,6.87 18.39,7.1 19.56,8.82C19.47,8.88 17.39,10.1 17.41,12.63C17.44,15.65 20.06,16.66 20.09,16.67C20.06,16.74 19.67,18.11 18.71,19.5M13,3.5C13.73,2.67 14.94,2.04 15.94,2C16.07,3.17 15.6,4.35 14.9,5.19C14.21,6.04 13.07,6.7 11.95,6.61C11.8,5.46 12.36,4.26 13,3.5Z" />
+    </svg>
+  )}
+  {platform === 'windows' && (
+    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" width="58%" height="58%">
+      <path d="M3 6.5 11 5.3V11.6H3ZM12.2 5.1 21 3.7v7.9h-8.8ZM3 12.6h8v6.3L3 17.7ZM12.2 12.6H21V20l-8.8-1.3Z" />
+    </svg>
+  )}
+  {platform === 'android' && (
+    <svg viewBox="0 0 100 172" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" width="52%" height="52%">
+      <path d="M38 55 L33 46 M62 55 L67 46" />
+      <path d="M32 84 V68 a18 18 0 0 1 36 0 V84 Z" />
+      <circle cx="42.5" cy="71" r="4" fill="#fff" stroke="none" />
+      <circle cx="57.5" cy="71" r="4" fill="#fff" stroke="none" />
+    </svg>
+  )}
+</span>
+
+<style>
+  .platform-glyph {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+</style>

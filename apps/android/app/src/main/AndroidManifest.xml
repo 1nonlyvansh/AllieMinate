@@ -17,7 +17,7 @@
 
     <!-- local LAN server (Phase 3/4): lets the paired Master Device browse and push files to this phone
          even while the app isn't in the foreground -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" tools:targetApi="34" />
 
     <!-- Images/Videos/Audio categories in the Master Device's phone browser -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
@@ -131,7 +131,8 @@
 
         <receiver
             android:name=".widget.DeviceStatusWidgetProvider"
-            android:exported="false">
+            android:exported="true"
+            android:permission="android.permission.BIND_APPWIDGET">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -142,7 +143,8 @@
 
         <receiver
             android:name=".widget.QuickShareWidgetProvider"
-            android:exported="false">
+            android:exported="true"
+            android:permission="android.permission.BIND_APPWIDGET">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>

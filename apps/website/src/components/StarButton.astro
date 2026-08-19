@@ -1,0 +1,144 @@
+---
+// Real GitHub star count (fetched client-side from the public, unauthenticated GitHub API —
+// no token needed for a public repo's read-only stats). Clicking the button opens the repo on
+// GitHub — there is no API that lets a third-party site star a repo on a visitor's behalf; that
+// would need the visitor's own GitHub OAuth login and a server to broker the token exchange,
+// which this static, serverless site deliberately doesn't have. Every real "Star on GitHub"
+// button anywhere works this way — link to the repo, let GitHub's own star button do the actual
+// starring.
+---
+<a
+  class="star-btn"
+  href="https://github.com/1nonlyvansh/AllieMinate"
+  target="_blank"
+  rel="noopener"
+  aria-label="Star AllieMinate on GitHub"
+>
+  <span class="star-btn-border" aria-hidden="true"></span>
+  <span class="star-btn-inner">
+    <svg class="star-btn-gh" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 .5C5.73.5.75 5.48.75 11.75c0 5.02 3.26 9.28 7.78 10.78.57.1.78-.25.78-.55 0-.27-.01-1.16-.02-2.11-3.17.69-3.84-1.34-3.84-1.34-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.25 3.33.95.1-.74.4-1.25.72-1.54-2.53-.29-5.19-1.27-5.19-5.63 0-1.24.44-2.26 1.17-3.06-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.14 1.17a10.9 10.9 0 0 1 5.72 0c2.18-1.48 3.14-1.17 3.14-1.17.62 1.58.23 2.75.11 3.04.73.8 1.17 1.82 1.17 3.06 0 4.37-2.67 5.34-5.21 5.62.41.36.77 1.06.77 2.14 0 1.55-.01 2.79-.01 3.17 0 .3.2.66.79.55A11.26 11.26 0 0 0 23.25 11.75C23.25 5.48 18.27.5 12 .5Z" />
+    </svg>
+    <span class="star-btn-label">Star on GitHub</span>
+    <span class="star-btn-count" id="gh-star-count" aria-live="polite">
+      <svg class="star-btn-star" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.006 5.404.434c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.434 2.082-5.005Z" />
+      </svg>
+      <span class="star-btn-num">—</span>
+    </span>
+  </span>
+</a>
+
+<style>
+  .star-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    border-radius: 999px;
+    padding: 1.5px;
+    /* Slow-drifting rainbow border — a plain-CSS stand-in for the Uiverse animated-gradient
+       border, since this project has no Tailwind build to compile the original's utility
+       classes against. */
+    background: linear-gradient(90deg, #ff5c5c, #ffd45c, #5cff8f, #5cd4ff, #a15cff, #ff5c5c);
+    background-size: 300% 100%;
+    animation: star-btn-rainbow 6s linear infinite;
+  }
+  .star-btn-border {
+    display: none;
+  }
+  .star-btn-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    transition: transform 0.15s var(--ease-out);
+  }
+  .star-btn:hover .star-btn-inner {
+    transform: scale(1.03);
+  }
+  .star-btn:active .star-btn-inner {
+    transform: scale(0.97);
+  }
+  .star-btn-gh {
+    width: 17px;
+    height: 17px;
+    flex-shrink: 0;
+  }
+  .star-btn-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding-left: 8px;
+    margin-left: 2px;
+    border-left: 1px solid var(--glass-border);
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+  .star-btn-star {
+    width: 14px;
+    height: 14px;
+    color: var(--warning);
+  }
+
+  @keyframes star-btn-rainbow {
+    to {
+      background-position: 300% 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .star-btn {
+      animation: none;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .star-btn-label {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  // Cache the count for an hour per browser — GitHub's unauthenticated API is capped at 60
+  // requests/hour per IP, shared across every visitor behind the same network; no reason to
+  // re-fetch on every page load from the same browser.
+  (async () => {
+    const el = document.querySelector('#gh-star-count .star-btn-num');
+    if (!el) return;
+
+    const CACHE_KEY = 'alliminate-gh-stars';
+    const CACHE_TTL_MS = 60 * 60 * 1000;
+
+    try {
+      const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+      if (cached && Date.now() - cached.time < CACHE_TTL_MS) {
+        el.textContent = cached.count;
+        return;
+      }
+    } catch {
+      // ignore malformed cache
+    }
+
+    try {
+      const res = await fetch('https://api.github.com/repos/1nonlyvansh/AllieMinate');
+      if (!res.ok) return;
+      const data = await res.json();
+      const count = typeof data.stargazers_count === 'number' ? data.stargazers_count : null;
+      if (count === null) return;
+      el.textContent = String(count);
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ count, time: Date.now() }));
+    } catch {
+      // Offline, rate-limited, or GitHub unreachable — leave the "—" placeholder rather than
+      // show a wrong/stale number.
+    }
+  })();
+</script>

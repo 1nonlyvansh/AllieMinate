@@ -17,7 +17,11 @@ import Icon from './Icon.astro';
           </summary>
           <div class="feature-body">
             <p>{f.desc}</p>
-            <a href={f.anchor}>Learn more →</a>
+            {f.anchor.startsWith('http') ? (
+              <a href={f.anchor} target="_blank" rel="noopener">Learn more ↗</a>
+            ) : (
+              <a href={f.anchor}>Learn more →</a>
+            )}
           </div>
         </details>
       ))}

@@ -1,0 +1,136 @@
+---
+import Icon from './Icon.astro';
+import AppMockup from './AppMockup.astro';
+import CloudProviderStrip from './CloudProviderStrip.astro';
+
+interface Chip {
+  icon: string;
+  title: string;
+  desc: string;
+}
+interface Props {
+  eyebrow: string;
+  title: string;
+  description: string;
+  chips: Chip[];
+}
+const { eyebrow, title, description, chips } = Astro.props;
+---
+<header class="page-hero">
+  <div class="wrap page-hero-inner">
+    <div class="page-hero-copy">
+      <span class="page-hero-eyebrow">{eyebrow}</span>
+      <h1 class="page-hero-title">{title}</h1>
+      <p class="page-hero-desc">{description}</p>
+
+      <div class="page-hero-chips">
+        {chips.map((c) => (
+          <div class="page-hero-chip">
+            <Icon name={c.icon} size={18} />
+            <div>
+              <div class="page-hero-chip-title">{c.title}</div>
+              <div class="page-hero-chip-desc">{c.desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div class="page-hero-visual">
+      <AppMockup size="compact" />
+    </div>
+  </div>
+
+  <div class="wrap page-hero-strip">
+    <CloudProviderStrip />
+  </div>
+</header>
+
+<style>
+  .page-hero {
+    padding: 148px 0 var(--space-6);
+  }
+  .page-hero-inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-6);
+    align-items: center;
+    margin-bottom: var(--space-4);
+  }
+  .page-hero-eyebrow {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-size: 12.5px;
+    font-weight: 600;
+    margin-bottom: var(--space-2);
+  }
+  .page-hero-title {
+    font-size: clamp(30px, 4vw, 44px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  .page-hero-desc {
+    margin-top: var(--space-2);
+    font-size: 16px;
+    color: var(--text-secondary);
+    max-width: 480px;
+    line-height: 1.6;
+  }
+  .page-hero-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+  }
+  .page-hero-chip {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    color: var(--accent);
+    max-width: 180px;
+  }
+  .page-hero-chip-title {
+    color: var(--text);
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .page-hero-chip-desc {
+    color: var(--text-secondary);
+    font-size: 11.5px;
+    line-height: 1.4;
+    margin-top: 2px;
+  }
+
+  @media (max-width: 1023px) {
+    .page-hero-inner {
+      grid-template-columns: 1fr;
+      text-align: center;
+    }
+    .page-hero-desc {
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .page-hero-chips {
+      justify-content: center;
+      text-align: left;
+    }
+    .page-hero-visual {
+      max-width: 420px;
+      margin: 0 auto;
+    }
+    .page-hero-strip {
+      display: flex;
+      justify-content: center;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .page-hero {
+      padding-top: 120px;
+    }
+  }
+</style>

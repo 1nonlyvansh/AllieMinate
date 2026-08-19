@@ -1,14 +1,16 @@
 #!/bin/bash
 set -euo pipefail
 
-ROOT="/Users/vanshkishore/Desktop/Projects/AllieMinate"
+# Resolve repository root relative to this script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DESKTOP="$ROOT/apps/desktop"
 BACKEND="$ROOT/apps/backend"
 ELECTRON_APP="$ROOT/node_modules/electron/dist/Electron.app"
 APP_NAME="AllieMinate"
 BUILD_STAGING="$(mktemp -d)"
 BUILD_APP="$BUILD_STAGING/$APP_NAME.app"
-INSTALL_DIR="$HOME/Applications"
+INSTALL_DIR="/Applications"
 trap 'rm -rf "$BUILD_STAGING"' EXIT
 
 INSTALLED_APP="$INSTALL_DIR/$APP_NAME.app"
@@ -184,12 +186,12 @@ create-dmg \
   --app-drop-link 480 170 \
   --no-internet-enable \
   "$DMG_OUT" \
-  "$DMG_SRC" \
-  || echo "create-dmg exited non-zero (it does this on some harmless Finder-layout races) — checking output anyway"
+  "$DMG_SRC"
 if [ -f "$DMG_OUT" ]; then
   echo "done: $DMG_OUT"
 else
-  echo "!! .dmg build failed — see output for the actual error (dev install below is unaffected)"
+  echo "!! .dmg build failed — see output for the actual error"
+  exit 1
 fi
 
 # --- personalize $BUILD_APP for the LOCAL dev install only, now that the pristine .dmg copy is already

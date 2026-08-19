@@ -1,45 +1,84 @@
 ---
 import platforms from '../data/platforms.json';
+import PlatformGlyph from './PlatformGlyph.astro';
+
+const MIN_OS: Record<string, string> = {
+  mac: 'macOS 12.0 or later',
+  windows: 'Windows 10 or later',
+  android: 'Android 8.0 or later',
+};
 ---
 <section class="section final-cta">
   <div class="wrap">
-    <h2 class="final-tagline reveal">Your files. Your clouds. Your devices.</h2>
-    <div class="final-buttons reveal">
-      {platforms.map((p) => (
-        <a class="btn btn-primary" href={p.downloadHref}>{p.downloadLabel}</a>
-      ))}
+    <div class="card final-cta-banner reveal">
+      <div class="final-cta-copy">
+        <h2>Ready to unify your clouds and devices?</h2>
+        <p>Join thousands of users who trust AllieMinate for their digital workspace.</p>
+      </div>
+      <div class="final-cta-platforms">
+        {platforms.map((p) => (
+          <div class="final-cta-platform">
+            <PlatformGlyph platform={p.device} size={28} />
+            <span>{p.name}</span>
+            <a class="btn btn-primary" href={p.downloadHref}>{p.downloadLabel}</a>
+            <span class="final-cta-req">{MIN_OS[p.device]}</span>
+          </div>
+        ))}
+      </div>
     </div>
-    <a class="final-secondary reveal" href="https://github.com/1nonlyvansh/AllieMinate" target="_blank" rel="noopener">View on GitHub</a>
   </div>
 </section>
 
 <style>
-  .final-cta {
-    text-align: center;
-    padding-top: var(--space-10);
-    padding-bottom: var(--space-10);
-  }
-  .final-tagline {
-    font-size: clamp(26px, 3.6vw, 38px);
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    margin-bottom: var(--space-3);
-  }
-  .final-buttons {
+  .final-cta-banner {
+    padding: var(--space-4);
     display: flex;
-    gap: 12px;
-    justify-content: center;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    background: linear-gradient(135deg, var(--accent-soft), var(--glass-bg-strong));
     flex-wrap: wrap;
-    margin-bottom: var(--space-2);
   }
-  .final-secondary {
-    display: inline-block;
-    margin-top: var(--space-1);
-    color: var(--accent);
-    text-decoration: none;
+  .final-cta-copy h2 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .final-cta-copy p {
+    margin-top: 6px;
+    color: var(--text-secondary);
     font-size: 14px;
+    max-width: 360px;
   }
-  .final-secondary:hover {
-    text-decoration: underline;
+  .final-cta-platforms {
+    display: flex;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+  }
+  .final-cta-platform {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
+    min-width: 140px;
+  }
+  .final-cta-platform span:first-of-type {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .final-cta-req {
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+
+  @media (max-width: 767px) {
+    .final-cta-banner {
+      flex-direction: column;
+      text-align: center;
+    }
+    .final-cta-platforms {
+      justify-content: center;
+    }
   }
 </style>

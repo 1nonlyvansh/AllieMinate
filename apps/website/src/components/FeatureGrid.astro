@@ -1,0 +1,93 @@
+---
+import Icon from './Icon.astro';
+
+interface Item {
+  icon: string;
+  title: string;
+  desc: string;
+  tone?: 'accent' | 'green';
+}
+interface Props {
+  eyebrow?: string;
+  title: string;
+  items: Item[];
+  columns?: 4 | 5;
+}
+const { eyebrow, title, items, columns = 4 } = Astro.props;
+---
+<section class="section">
+  <div class="wrap">
+    {eyebrow && <div class="section-label" style="text-align:center">{eyebrow}</div>}
+    <h2 class="section-title feature-grid-title">{title}</h2>
+
+    <div class={`feature-grid feature-grid-${columns}`} data-reveal-group>
+      {items.map((item) => (
+        <div class="card feature-grid-card reveal">
+          <div class={`feature-grid-icon ${item.tone === 'green' ? 'is-green' : ''}`}>
+            <Icon name={item.icon} size={22} />
+          </div>
+          <h3>{item.title}</h3>
+          <p>{item.desc}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .feature-grid-title {
+    text-align: center;
+    margin-bottom: var(--space-4);
+  }
+  .feature-grid {
+    display: grid;
+    gap: var(--space-2);
+  }
+  .feature-grid-4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .feature-grid-5 {
+    grid-template-columns: repeat(5, 1fr);
+  }
+  .feature-grid-card {
+    padding: var(--space-3);
+  }
+  .feature-grid-icon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--r-md);
+    background: var(--accent-soft);
+    color: var(--accent);
+    margin-bottom: var(--space-2);
+  }
+  .feature-grid-icon.is-green {
+    background: color-mix(in srgb, var(--online) 16%, transparent);
+    color: var(--online);
+  }
+  .feature-grid-card h3 {
+    font-size: 15.5px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .feature-grid-card p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+
+  @media (max-width: 1023px) {
+    .feature-grid-4,
+    .feature-grid-5 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (max-width: 480px) {
+    .feature-grid-4,
+    .feature-grid-5 {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

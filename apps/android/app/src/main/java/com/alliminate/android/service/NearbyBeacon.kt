@@ -60,18 +60,16 @@ object NearbyBeacon {
             }
             try {
                 while (running) {
-                    if (Prefs.nearbyShareEnabled.value) {
-                        val payload = JSONObject().apply {
-                            put("type", "alliminate-nearby")
-                            put("id", Prefs.deviceId)
-                            put("name", Prefs.deviceName)
-                            put("platform", "android")
-                            put("port", LOCAL_SERVER_PORT)
-                            put("nearbyShareEnabled", true)
-                        }.toString().toByteArray()
-                        runCatching {
-                            socket.send(DatagramPacket(payload, payload.size, InetAddress.getByName("255.255.255.255"), NEARBY_PORT))
-                        }
+                    val payload = JSONObject().apply {
+                        put("type", "alliminate-nearby")
+                        put("id", Prefs.deviceId)
+                        put("name", Prefs.deviceName)
+                        put("platform", "android")
+                        put("port", LOCAL_SERVER_PORT)
+                        put("nearbyShareEnabled", Prefs.nearbyShareEnabled.value)
+                    }.toString().toByteArray()
+                    runCatching {
+                        socket.send(DatagramPacket(payload, payload.size, InetAddress.getByName("255.255.255.255"), NEARBY_PORT))
                     }
                     Thread.sleep(BEACON_INTERVAL_MS)
                 }

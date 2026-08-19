@@ -1,0 +1,180 @@
+---
+// Real scope justification — same facts as pages/privacy.astro's Google Account data section
+// (the full `drive` scope, not `drive.file`, because AllieMinate needs to browse a user's
+// pre-existing Drive structure). Condensed here, not re-derived.
+import Icon from './Icon.astro';
+
+const PERMISSIONS = [
+  'View and manage your files in Google Drive',
+  'Upload and download files to your Google Drive',
+  'Show basic information about your Google Account',
+];
+const TRUST = [
+  { icon: 'shield', title: 'Trusted', desc: 'Built with security and privacy in mind. OAuth 2.0 ensures safe and secure access.' },
+  { icon: 'shield', title: 'Secure', desc: 'We use industry-standard encryption and never store your cloud data.' },
+  { icon: 'devices', title: 'Transparent', desc: 'Open about our permissions and how your data is used.' },
+];
+---
+<section class="section google-access">
+  <div class="wrap google-access-inner">
+    <div class="google-access-visual" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="72" height="72">
+        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
+        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.85A11 11 0 0 0 12 23z"/>
+        <path fill="#FBBC05" d="M5.84 14.09A6.6 6.6 0 0 1 5.5 12c0-.73.13-1.43.34-2.09V7.06H2.18A11 11 0 0 0 1 12c0 1.77.43 3.45 1.18 4.94l3.66-2.85z"/>
+        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.06l3.66 2.85C6.71 7.31 9.14 5.38 12 5.38z"/>
+      </svg>
+      <div class="google-access-lock" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="#fff"><path d="M6 10V8a6 6 0 1 1 12 0v2h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h1Zm2 0h8V8a4 4 0 0 0-8 0v2Z"/></svg>
+      </div>
+    </div>
+
+    <div class="google-access-copy">
+      <h2 class="section-title">Why AllieMinate Requests Google Access</h2>
+      <p>
+        AllieMinate uses Google OAuth to securely connect your Google Account and access your
+        Google Drive. The requested permissions allow AllieMinate to:
+      </p>
+      <ul class="google-access-list">
+        {PERMISSIONS.map((p) => (
+          <li><Icon name="check" size={16} /> {p}</li>
+        ))}
+      </ul>
+      <p class="google-access-note">
+        AllieMinate never asks for your Google password.<br />
+        You can revoke access anytime from your Google Account.
+      </p>
+      <a class="google-access-link" href="/privacy">Learn more about how we use your data in our Privacy Policy.</a>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="trust-row" data-reveal-group>
+      {TRUST.map((t) => (
+        <div class="trust-item reveal">
+          <Icon name={t.icon} size={20} />
+          <div>
+            <div class="trust-title">{t.title}</div>
+            <div class="trust-desc">{t.desc}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .google-access-inner {
+    display: grid;
+    grid-template-columns: 0.8fr 1.2fr;
+    gap: var(--space-6);
+    align-items: center;
+    margin-bottom: var(--space-4);
+  }
+  .google-access-visual {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    max-width: 240px;
+    margin: 0 auto;
+    border-radius: 50%;
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg-soft);
+  }
+  .google-access-lock {
+    position: absolute;
+    right: 8%;
+    bottom: 8%;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .google-access-copy p {
+    color: var(--text-secondary);
+    font-size: 15px;
+    line-height: 1.65;
+    margin-top: var(--space-2);
+    max-width: 520px;
+  }
+  .google-access-list {
+    list-style: none;
+    padding: 0;
+    margin: var(--space-2) 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .google-access-list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14.5px;
+    color: var(--text);
+  }
+  .google-access-list :global(svg) {
+    color: var(--online);
+    flex-shrink: 0;
+  }
+  .google-access-note {
+    font-size: 13px !important;
+    color: var(--text-tertiary) !important;
+    line-height: 1.6 !important;
+  }
+  .google-access-link {
+    display: inline-block;
+    margin-top: var(--space-2);
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 13.5px;
+  }
+  .google-access-link:hover {
+    text-decoration: underline;
+  }
+  .trust-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border-radius: var(--r-lg);
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg-soft);
+  }
+  .trust-item {
+    display: flex;
+    gap: 10px;
+    color: var(--accent);
+  }
+  .trust-title {
+    color: var(--text);
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .trust-desc {
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    line-height: 1.5;
+    margin-top: 2px;
+  }
+
+  @media (max-width: 1023px) {
+    .google-access-inner {
+      grid-template-columns: 1fr;
+      text-align: center;
+    }
+    .google-access-list {
+      align-items: center;
+    }
+    .trust-row {
+      grid-template-columns: 1fr;
+    }
+    .trust-item {
+      text-align: left;
+    }
+  }
+</style>
