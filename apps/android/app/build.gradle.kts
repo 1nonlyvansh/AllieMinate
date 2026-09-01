@@ -61,7 +61,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("androidx.navigation:navigation-compose:2.10.0")
     implementation("androidx.biometric:biometric:1.1.0")
     // biometric:1.1.0 transitively pulls fragment:1.2.5 (2020) and nothing else in the graph asks for
     // newer, so Gradle resolves to that ancient version — which has a real bug where FragmentActivity's
