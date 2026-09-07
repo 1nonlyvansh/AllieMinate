@@ -25,7 +25,7 @@
       "App Lock via app PIN (Windows Hello not yet implemented)"
     ],
     "downloadLabel": "Download .exe",
-    "downloadHref": "https://github.com/1nonlyvansh/AllieMinate/releases/latest/download/AllieMinate-Windows.exe",
+    "downloadHref": "https://github.com/1nonlyvansh/AllieMinate/releases/latest/download/AllieMinate.Setup.0.1.0.exe",
     "installNote": "Unsigned build — SmartScreen shows a warning. Click More info → Run anyway.",
     "guideHref": "https://github.com/1nonlyvansh/AllieMinate/blob/main/docs/installation/windows.md"
   },
