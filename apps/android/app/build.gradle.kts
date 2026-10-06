@@ -70,7 +70,7 @@ dependencies {
     // current version.
     implementation("androidx.fragment:fragment-ktx:1.8.2")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
-    implementation("androidx.work:work-runtime-ktx:2.9.1")
+    implementation("androidx.work:work-runtime-ktx:2.12.0")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
